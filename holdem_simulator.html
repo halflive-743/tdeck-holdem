@@ -798,9 +798,9 @@ function rebuild_buttons() {
   const { sb, bb } = get_blinds();
   if (state === "title") {
     active_btns = [
-      { label: `BLINDS $${sb}/$${bb}`, enabled: true, fn: cycle_blinds },
-      { label: "RESET $500", enabled: true, fn: reset_table },
-      { label: "DEAL HOLD'EM [D]", primary: true, enabled: true, fn: start_hand },
+      { label: `BLINDS $${sb}/$${bb}`, weight: 96, enabled: true, fn: cycle_blinds },
+      { label: "RESET $500", weight: 84, enabled: true, fn: reset_table },
+      { label: "DEAL HOLD'EM [D]", weight: 122, primary: true, enabled: true, fn: start_hand },
     ];
     focus_idx = 3;
   } else if (state === "player") {
@@ -808,29 +808,29 @@ function rebuild_buttons() {
     const to_call = I(Math.max(0, cur_bet - p.street_bet));
     const can_raise = p.stack > to_call;
     sync_raise_bounds();
-    const call_lbl = to_call <= 0 ? "CHECK [C]" : (to_call >= p.stack ? `ALL-IN $${p.stack}` : `CALL $${to_call}`);
+    const call_lbl = to_call <= 0 ? "CHECK" : (to_call >= p.stack ? `ALL-IN $${p.stack}` : `CALL $${to_call}`);
     const raise_lbl = cur_bet === 0 ? `BET $${raise_to}` : `RAISE $${raise_to}`;
     active_btns = [
-      { label: "FOLD [F]", enabled: true, fn: () => perform_action(0, "fold") },
-      { label: call_lbl, primary: true, enabled: true, fn: () => perform_action(0, "call") },
-      { label: raise_lbl, enabled: can_raise, fn: () => perform_action(0, "raise", raise_to) },
-      { label: "+BB", enabled: can_raise, fn: () => {
+      { label: "FOLD", weight: 44, enabled: true, fn: () => perform_action(0, "fold") },
+      { label: call_lbl, weight: 74, primary: true, enabled: true, fn: () => perform_action(0, "call") },
+      { label: raise_lbl, weight: 96, enabled: can_raise, fn: () => perform_action(0, "raise", raise_to) },
+      { label: "+BB", weight: 36, enabled: can_raise, fn: () => {
           const max_t = I(p.street_bet + p.stack);
           raise_to = raise_to >= max_t ? I(cur_bet + Math.max(bb, min_raise)) : I(raise_to + bb);
           sync_raise_bounds(); rebuild_buttons(); draw_screen();
         }},
-      { label: "ALL-IN", enabled: p.stack > 0, fn: () => perform_action(0, "allin") },
+      { label: "ALL-IN", weight: 52, enabled: p.stack > 0, fn: () => perform_action(0, "allin") },
     ];
     focus_idx = 2;
   } else if (state === "ai") {
     const who = seats[turn_seat] ? seats[turn_seat].name : "DEALER";
-    active_btns = [{ label: `${who} ACTING... (TAP TO SKIP)`, enabled: true, fn: on_tick }];
+    active_btns = [{ label: `${who} ACTING... (TAP TO SKIP)`, weight: 300, enabled: true, fn: on_tick }];
     focus_idx = 1;
   } else if (state === "done") {
     active_btns = [
-      { label: `$${sb}/$${bb} [B]`, enabled: true, fn: cycle_blinds },
-      { label: "NEW TBL [N]", enabled: true, fn: reset_table },
-      { label: "NEXT HAND [D]", primary: true, enabled: true, fn: start_hand },
+      { label: `$${sb}/$${bb} [B]`, weight: 88, enabled: true, fn: cycle_blinds },
+      { label: "NEW TBL [N]", weight: 94, enabled: true, fn: reset_table },
+      { label: "NEXT HAND [D]", weight: 120, primary: true, enabled: true, fn: start_hand },
     ];
     focus_idx = 3;
   }
@@ -858,7 +858,8 @@ function draw_suit_pip(x, y, suit, scale) {
       cv.rect(x - 1, y + 1, 3, 1, col, true);
       cv.rect(x, y + 2, 1, 1, col, true);
     } else {
-      cv.rect(x - 1, y - 2, 3, 2, col, true);
+      cv.rect(x - 1, y - 2, 3, 1, col, true);
+      cv.rect(x, y - 1, 1, 1, col, true);
       cv.rect(x - 2, y, 5, 2, col, true);
       cv.rect(x, y + 2, 1, 2, col, true);
     }
@@ -868,69 +869,100 @@ function draw_suit_pip(x, y, suit, scale) {
       cv.rect(x - 1, y - 2, 3, 1, col, true);
       cv.rect(x - 2, y - 1, 5, 1, col, true);
       cv.rect(x - 3, y, 7, 2, col, true);
-      cv.rect(x - 1, y + 2, 3, 2, col, true);
+      cv.rect(x, y + 2, 1, 1, col, true);
+      cv.rect(x - 1, y + 3, 3, 1, col, true);
     } else if (suit === 2) {
-      cv.rect(x - 2, y - 2, 2, 1, col, true);
-      cv.rect(x + 1, y - 2, 2, 1, col, true);
+      cv.rect(x - 2, y - 3, 2, 1, col, true);
+      cv.rect(x + 1, y - 3, 2, 1, col, true);
+      cv.rect(x - 3, y - 2, 3, 1, col, true);
+      cv.rect(x + 1, y - 2, 3, 1, col, true);
       cv.rect(x - 3, y - 1, 7, 2, col, true);
       cv.rect(x - 2, y + 1, 5, 1, col, true);
       cv.rect(x - 1, y + 2, 3, 1, col, true);
       cv.rect(x, y + 3, 1, 1, col, true);
     } else if (suit === 3) {
-      for (let dy = -3; dy <= 3; dy++) {
-        const hw = 3 - Math.abs(dy);
-        cv.rect(x - hw, y + dy, hw * 2 + 1, 1, col, true);
-      }
+      cv.rect(x, y - 3, 1, 1, col, true);
+      cv.rect(x - 1, y - 2, 3, 1, col, true);
+      cv.rect(x - 2, y - 1, 5, 1, col, true);
+      cv.rect(x - 3, y, 7, 1, col, true);
+      cv.rect(x - 2, y + 1, 5, 1, col, true);
+      cv.rect(x - 1, y + 2, 3, 1, col, true);
+      cv.rect(x, y + 3, 1, 1, col, true);
     } else {
-      cv.circle(x, y - 2, 1, col, true);
-      cv.circle(x - 2, y, 1, col, true);
-      cv.circle(x + 2, y, 1, col, true);
-      cv.rect(x - 1, y, 3, 4, col, true);
+      cv.rect(x - 1, y - 3, 3, 2, col, true);
+      cv.rect(x - 3, y - 1, 2, 2, col, true);
+      cv.rect(x + 2, y - 1, 2, 2, col, true);
+      cv.rect(x - 1, y - 1, 3, 2, col, true);
+      cv.rect(x, y + 1, 1, 2, col, true);
+      cv.rect(x - 1, y + 3, 3, 1, col, true);
     }
   } else {
     if (suit === 1) {
-      for (let dy = -5; dy <= 1; dy++) {
-        const hw = I((dy + 5) * 0.85);
-        cv.rect(x - hw, y + dy, hw * 2 + 1, 1, col, true);
-      }
-      cv.circle(x - 2, y + 1, 2, col, true);
-      cv.circle(x + 2, y + 1, 2, col, true);
-      cv.rect(x - 1, y + 2, 3, 4, col, true);
+      cv.rect(x, y - 5, 1, 1, col, true);
+      cv.rect(x - 1, y - 4, 3, 1, col, true);
+      cv.rect(x - 2, y - 3, 5, 1, col, true);
+      cv.rect(x - 3, y - 2, 7, 1, col, true);
+      cv.rect(x - 4, y - 1, 9, 1, col, true);
+      cv.rect(x - 5, y, 11, 2, col, true);
+      cv.rect(x - 4, y + 2, 3, 1, col, true);
+      cv.rect(x, y + 2, 1, 1, col, true);
+      cv.rect(x + 2, y + 2, 3, 1, col, true);
+      cv.rect(x - 1, y + 3, 3, 1, col, true);
+      cv.rect(x - 2, y + 4, 5, 1, col, true);
+      cv.rect(x - 3, y + 5, 7, 1, col, true);
     } else if (suit === 2) {
-      cv.circle(x - 3, y - 2, 2, col, true);
-      cv.circle(x + 3, y - 2, 2, col, true);
-      for (let dy = -1; dy <= 5; dy++) {
-        const hw = Math.max(0, 5 - dy);
-        cv.rect(x - hw, y + dy, hw * 2 + 1, 1, col, true);
-      }
+      cv.rect(x - 3, y - 5, 2, 1, col, true);
+      cv.rect(x + 2, y - 5, 2, 1, col, true);
+      cv.rect(x - 4, y - 4, 4, 1, col, true);
+      cv.rect(x + 1, y - 4, 4, 1, col, true);
+      cv.rect(x - 5, y - 3, 11, 3, col, true);
+      cv.rect(x - 4, y, 9, 1, col, true);
+      cv.rect(x - 3, y + 1, 7, 1, col, true);
+      cv.rect(x - 2, y + 2, 5, 1, col, true);
+      cv.rect(x - 1, y + 3, 3, 1, col, true);
+      cv.rect(x, y + 4, 1, 2, col, true);
     } else if (suit === 3) {
-      for (let dy = -5; dy <= 5; dy++) {
-        const hw = 5 - Math.abs(dy);
-        cv.rect(x - hw, y + dy, hw * 2 + 1, 1, col, true);
-      }
+      cv.rect(x, y - 5, 1, 1, col, true);
+      cv.rect(x - 1, y - 4, 3, 1, col, true);
+      cv.rect(x - 2, y - 3, 5, 2, col, true);
+      cv.rect(x - 3, y - 1, 7, 1, col, true);
+      cv.rect(x - 4, y, 9, 1, col, true);
+      cv.rect(x - 3, y + 1, 7, 1, col, true);
+      cv.rect(x - 2, y + 2, 5, 2, col, true);
+      cv.rect(x - 1, y + 4, 3, 1, col, true);
+      cv.rect(x, y + 5, 1, 1, col, true);
     } else {
-      cv.circle(x, y - 3, 2, col, true);
-      cv.circle(x - 3, y + 1, 2, col, true);
-      cv.circle(x + 3, y + 1, 2, col, true);
-      cv.rect(x - 1, y, 3, 6, col, true);
+      cv.rect(x - 1, y - 5, 3, 1, col, true);
+      cv.rect(x - 2, y - 4, 5, 2, col, true);
+      cv.rect(x - 1, y - 2, 3, 1, col, true);
+      cv.rect(x - 4, y - 1, 3, 1, col, true);
+      cv.rect(x, y - 1, 1, 1, col, true);
+      cv.rect(x + 2, y - 1, 3, 1, col, true);
+      cv.rect(x - 5, y, 11, 2, col, true);
+      cv.rect(x - 4, y + 2, 3, 1, col, true);
+      cv.rect(x, y + 2, 1, 1, col, true);
+      cv.rect(x + 2, y + 2, 3, 1, col, true);
+      cv.rect(x - 1, y + 3, 3, 2, col, true);
+      cv.rect(x - 3, y + 5, 7, 1, col, true);
     }
   }
 }
 
 function draw_card_box(x, y, cw, ch, card, hidden) {
   x = I(x); y = I(y); cw = I(cw); ch = I(ch);
-  cv.rect(x + 1, y + 1, cw, ch, COL_CARD_SHAD, true, 3);
+  cv.rect(x - 1, y + 1, cw + 2, ch, COL_CARD_SHAD, true, 3);
   if (hidden || !card) {
     cv.rect(x, y, cw, ch, COL_CARD_BG, true, 3);
     cv.rect(x + 1, y + 1, cw - 2, ch - 2, COL_CARD_BACK, true, 2);
     if (cw >= 26) {
       cv.rect(x + 3, y + 3, cw - 6, ch - 6, COL_CARD_TRIM, false, 2);
-      cv.circle(I(x + cw / 2), I(y + ch / 2), 4, COL_GOLD, false);
+      const ew = Math.max(6, I(cw * 0.28)), eh = Math.max(6, I(ch * 0.22));
+      cv.rect(I(x + (cw - ew) / 2), I(y + (ch - eh) / 2), ew, eh, COL_GOLD, false, 2);
     }
     return;
   }
   cv.rect(x, y, cw, ch, COL_CARD_BG, true, 3);
-  cv.rect(x, y, cw, ch, 0xCBD2D9, false, 3);
+  cv.rect(x, y, cw, ch, 0x64748B, false, 3);
   const col = (card.s === 2 || card.s === 3) ? COL_RED : COL_BLACK;
   const rstr = RANKS[card.r - 1];
   if (cw <= 22) {
@@ -1036,8 +1068,8 @@ function draw_screen() {
 
     const py = top_h + 102, p = seats[0];
     if (p.cards.length === 2) {
-      draw_card_box(8, py, 37, 48, p.cards[0], false);
-      draw_card_box(38, py, 37, 48, p.cards[1], false);
+      draw_card_box(6, py, 34, 48, p.cards[0], false);
+      draw_card_box(42, py, 34, 48, p.cards[1], false);
     }
 
     const info_x = 82, info_w = W - info_x - 6;
@@ -1069,17 +1101,37 @@ function draw_screen() {
 
   const nb = active_btns.length;
   if (nb > 0) {
-    const gap = 4, bw = I((W - gap * (nb + 1)) / nb), bh = bot_h - 6;
+    const gap = nb >= 5 ? 3 : 4, avail_w = W - gap * (nb + 1), bh = bot_h - 6;
+    const weights = [], tws = [];
+    let total_wt = 0, widest_i = 0;
     for (let i = 0; i < nb; i++) {
       const b = active_btns[i];
-      const bx = gap + i * (bw + gap), bby = by + 3;
+      const tw = text_w(b.label, 11);
+      const wt = Math.max(b.weight || 60, tw + 8);
+      weights.push(wt);
+      tws.push(tw);
+      total_wt += wt;
+      if (wt > weights[widest_i]) widest_i = i;
+    }
+    const bws = [];
+    let used_w = 0;
+    for (let i = 0; i < nb; i++) {
+      bws.push(I((avail_w * weights[i]) / total_wt));
+      used_w += bws[i];
+    }
+    if (used_w < avail_w) bws[widest_i] += (avail_w - used_w);
+
+    let cur_bx = gap;
+    for (let i = 0; i < nb; i++) {
+      const b = active_btns[i], bw = bws[i], bx = cur_bx, bby = by + 3;
+      cur_bx += bw + gap;
       b.x = bx; b.y = bby; b.w = bw; b.h = bh;
       const bg = !b.enabled ? COL_BTN_DIS : (b.primary ? COL_BTN_ACT : COL_BTN);
       cv.rect(bx, bby, bw, bh, bg, true, 4);
       if (i + 1 === focus_idx && b.enabled) cv.rect(bx, bby, bw, bh, b.primary ? COL_GOLD : C.accent, false, 4);
       else if (b.enabled) cv.rect(bx, bby, bw, bh, 0x2B3642, false, 4);
       const tcol = !b.enabled ? COL_TEXT_DIM : (b.primary ? COL_GOLD : C.text);
-      const tw = text_w(b.label, 11);
+      const tw = tws[i];
       cv.text(bx + Math.max(2, I((bw - tw) / 2)), bby + I((bh - 11) / 2), b.label, tcol, 11);
     }
   }

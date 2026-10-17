@@ -1091,9 +1091,9 @@ rebuild_buttons = function()
 
   if state == "title" then
     active_btns = {
-      { label = string.format("BLINDS $%d/$%d", sb, bb), key = "b", enabled = true, fn = cycle_blinds },
-      { label = "RESET $500", key = "n", enabled = true, fn = reset_table },
-      { label = compact_btns and "DEAL" or "DEAL HOLD'EM [D]", key = "d", primary = true, enabled = true, fn = start_hand },
+      { label = string.format("BLINDS $%d/$%d", sb, bb), key = "b", weight = 96, enabled = true, fn = cycle_blinds },
+      { label = "RESET $500", key = "n", weight = 84, enabled = true, fn = reset_table },
+      { label = compact_btns and "DEAL" or "DEAL HOLD'EM [D]", key = "d", weight = 122, primary = true, enabled = true, fn = start_hand },
     }
     focus_idx = 3
   elseif state == "player" then
@@ -1104,7 +1104,7 @@ rebuild_buttons = function()
 
     local call_lbl
     if to_call <= 0 then
-      call_lbl = compact_btns and "CHECK" or "CHECK [C]"
+      call_lbl = "CHECK"
     elseif to_call >= p.stack then
       call_lbl = string.format("ALL-IN $%d", I(p.stack))
     else
@@ -1116,10 +1116,10 @@ rebuild_buttons = function()
       or string.format("RAISE $%d", I(raise_to))
 
     active_btns = {
-      { label = compact_btns and "FOLD" or "FOLD [F]", key = "f", enabled = true, fn = function() perform_action(1, "fold") end },
-      { label = call_lbl,  key = "c", primary = true, enabled = true, fn = function() perform_action(1, "call") end },
-      { label = raise_lbl, key = "r", enabled = can_raise, fn = function() perform_action(1, "raise", raise_to) end },
-      { label = "+BB",     key = "+", enabled = can_raise, fn = function()
+      { label = "FOLD",    key = "f", weight = 44, enabled = true, fn = function() perform_action(1, "fold") end },
+      { label = call_lbl,  key = "c", weight = 74, primary = true, enabled = true, fn = function() perform_action(1, "call") end },
+      { label = raise_lbl, key = "r", weight = 96, enabled = can_raise, fn = function() perform_action(1, "raise", raise_to) end },
+      { label = "+BB",     key = "+", weight = 36, enabled = can_raise, fn = function()
           local max_t = I(p.street_bet + p.stack)
           if raise_to >= max_t then
             raise_to = I(cur_bet + math.max(bb, min_raise))
@@ -1131,32 +1131,40 @@ rebuild_buttons = function()
           rebuild_buttons()
           draw_screen()
         end },
-      { label = "ALL-IN",  key = "a", enabled = p.stack > 0, fn = function() perform_action(1, "allin") end },
+      { label = "ALL-IN",  key = "a", weight = 52, enabled = p.stack > 0, fn = function() perform_action(1, "allin") end },
     }
     focus_idx = 2
   elseif state == "ai" then
     local who = seats[turn_seat] and seats[turn_seat].name or "DEALER"
     active_btns = {
-      { label = who .. " ACTING... (TAP TO SKIP)", key = " ", enabled = true, fn = function()
+      { label = who .. " ACTING... (TAP TO SKIP)", key = " ", weight = 300, enabled = true, fn = function()
           if state == "ai" then app.on_tick(0) end
         end }
     }
     focus_idx = 1
   elseif state == "done" then
     active_btns = {
-      { label = string.format("$%d/$%d [B]", sb, bb), key = "b", enabled = true, fn = cycle_blinds },
-      { label = compact_btns and "RESET" or "NEW TBL [N]", key = "n", enabled = true, fn = reset_table },
-      { label = compact_btns and "DEAL [D]" or "NEXT HAND [D]", key = "d", primary = true, enabled = true, fn = start_hand },
+      { label = string.format("$%d/$%d [B]", sb, bb), key = "b", weight = 88, enabled = true, fn = cycle_blinds },
+      { label = compact_btns and "RESET" or "NEW TBL [N]", key = "n", weight = 94, enabled = true, fn = reset_table },
+      { label = compact_btns and "DEAL [D]" or "NEXT HAND [D]", key = "d", weight = 120, primary = true, enabled = true, fn = start_hand },
     }
     focus_idx = 3
   end
 end
 
--- Scalable solid-rect vector suit pip renderer (crisp at any radius r >= 2)
+-- Helper: draw a filled octagonal disk in O(1) using two overlapping rects (avoids LVGL lv_canvas_draw_arc 0..360 bug)
+local function fill_disk(tc, cx, cy, rad, col)
+  rad = math.max(1, I(rad))
+  local c = math.max(1, I(rad * 0.68))
+  tc:rect(cx - c, cy - rad, c * 2 + 1, rad * 2 + 1, col, true)
+  tc:rect(cx - rad, cy - c, rad * 2 + 1, c * 2 + 1, col, true)
+end
+
+-- Scalable solid-rect vector suit pip renderer (100% rect-based, zero circle calls)
 local function draw_suit_pip(x, y, suit, r)
   x, y, r = I(x), I(y), math.max(2, I(r))
   local col = (suit == 2 or suit == 3) and COL_RED or COL_BLACK
-  local step = r >= 9 and 2 or 1
+  local step = r >= 6 and 2 or 1
 
   -- Fast path: if using a tiled virtual canvas and this pip lies wholly within one tile,
   -- issue draw calls directly to that tile's native canvas with local coordinates.
@@ -1178,7 +1186,7 @@ local function draw_suit_pip(x, y, suit, r)
   local px, py = x - ox, y - oy
 
   if r <= 2 then
-    -- Ultra-compact mini pip (for small T-Deck AI showdown cards)
+    -- Ultra-compact 5x5 mini pip (for small T-Deck AI showdown cards)
     if suit == 1 then -- Spade
       tc:rect(px, py - 2, 1, 1, col, true)
       tc:rect(px - 1, py - 1, 3, 1, col, true)
@@ -1197,13 +1205,105 @@ local function draw_suit_pip(x, y, suit, r)
       tc:rect(px - 1, py + 1, 3, 1, col, true)
       tc:rect(px, py + 2, 1, 1, col, true)
     else -- Club
-      tc:rect(px - 1, py - 2, 3, 2, col, true)
+      tc:rect(px - 1, py - 2, 3, 1, col, true)
+      tc:rect(px, py - 1, 1, 1, col, true)
       tc:rect(px - 2, py, 5, 2, col, true)
       tc:rect(px, py + 2, 1, 2, col, true)
     end
     return
   end
 
+  if r <= 4 then
+    -- Hand-crafted 7x7 corner suit pip (T-Deck & compact screens)
+    if suit == 1 then -- Spade
+      tc:rect(px, py - 3, 1, 1, col, true)
+      tc:rect(px - 1, py - 2, 3, 1, col, true)
+      tc:rect(px - 2, py - 1, 5, 1, col, true)
+      tc:rect(px - 3, py, 7, 2, col, true)
+      tc:rect(px, py + 2, 1, 1, col, true)
+      tc:rect(px - 1, py + 3, 3, 1, col, true)
+    elseif suit == 2 then -- Heart (deep top cleft)
+      tc:rect(px - 2, py - 3, 2, 1, col, true)
+      tc:rect(px + 1, py - 3, 2, 1, col, true)
+      tc:rect(px - 3, py - 2, 3, 1, col, true)
+      tc:rect(px + 1, py - 2, 3, 1, col, true)
+      tc:rect(px - 3, py - 1, 7, 2, col, true)
+      tc:rect(px - 2, py + 1, 5, 1, col, true)
+      tc:rect(px - 1, py + 2, 3, 1, col, true)
+      tc:rect(px, py + 3, 1, 1, col, true)
+    elseif suit == 3 then -- Diamond (narrow rhombus)
+      tc:rect(px, py - 3, 1, 1, col, true)
+      tc:rect(px - 1, py - 2, 3, 1, col, true)
+      tc:rect(px - 2, py - 1, 5, 1, col, true)
+      tc:rect(px - 3, py, 7, 1, col, true)
+      tc:rect(px - 2, py + 1, 5, 1, col, true)
+      tc:rect(px - 1, py + 2, 3, 1, col, true)
+      tc:rect(px, py + 3, 1, 1, col, true)
+    else -- Club (3 distinct clover lobes + stem)
+      tc:rect(px - 1, py - 3, 3, 2, col, true)
+      tc:rect(px - 3, py - 1, 2, 2, col, true)
+      tc:rect(px + 2, py - 1, 2, 2, col, true)
+      tc:rect(px - 1, py - 1, 3, 2, col, true)
+      tc:rect(px, py + 1, 1, 2, col, true)
+      tc:rect(px - 1, py + 3, 3, 1, col, true)
+    end
+    return
+  end
+
+  if r == 5 then
+    -- Hand-crafted 11x11 center card pip (T-Deck, Heltec V4, Pager)
+    if suit == 1 then -- Spade
+      tc:rect(px, py - 5, 1, 1, col, true)
+      tc:rect(px - 1, py - 4, 3, 1, col, true)
+      tc:rect(px - 2, py - 3, 5, 1, col, true)
+      tc:rect(px - 3, py - 2, 7, 1, col, true)
+      tc:rect(px - 4, py - 1, 9, 1, col, true)
+      tc:rect(px - 5, py, 11, 2, col, true)
+      tc:rect(px - 4, py + 2, 3, 1, col, true)
+      tc:rect(px, py + 2, 1, 1, col, true)
+      tc:rect(px + 2, py + 2, 3, 1, col, true)
+      tc:rect(px - 1, py + 3, 3, 1, col, true)
+      tc:rect(px - 2, py + 4, 5, 1, col, true)
+      tc:rect(px - 3, py + 5, 7, 1, col, true)
+    elseif suit == 2 then -- Heart
+      tc:rect(px - 3, py - 5, 2, 1, col, true)
+      tc:rect(px + 2, py - 5, 2, 1, col, true)
+      tc:rect(px - 4, py - 4, 4, 1, col, true)
+      tc:rect(px + 1, py - 4, 4, 1, col, true)
+      tc:rect(px - 5, py - 3, 11, 3, col, true)
+      tc:rect(px - 4, py, 9, 1, col, true)
+      tc:rect(px - 3, py + 1, 7, 1, col, true)
+      tc:rect(px - 2, py + 2, 5, 1, col, true)
+      tc:rect(px - 1, py + 3, 3, 1, col, true)
+      tc:rect(px, py + 4, 1, 2, col, true)
+    elseif suit == 3 then -- Diamond (slender casino rhombus)
+      tc:rect(px, py - 5, 1, 1, col, true)
+      tc:rect(px - 1, py - 4, 3, 1, col, true)
+      tc:rect(px - 2, py - 3, 5, 2, col, true)
+      tc:rect(px - 3, py - 1, 7, 1, col, true)
+      tc:rect(px - 4, py, 9, 1, col, true)
+      tc:rect(px - 3, py + 1, 7, 1, col, true)
+      tc:rect(px - 2, py + 2, 5, 2, col, true)
+      tc:rect(px - 1, py + 4, 3, 1, col, true)
+      tc:rect(px, py + 5, 1, 1, col, true)
+    else -- Club (3 distinct round clover leaves + stem + base)
+      tc:rect(px - 1, py - 5, 3, 1, col, true)
+      tc:rect(px - 2, py - 4, 5, 2, col, true)
+      tc:rect(px - 1, py - 2, 3, 1, col, true)
+      tc:rect(px - 4, py - 1, 3, 1, col, true)
+      tc:rect(px, py - 1, 1, 1, col, true)
+      tc:rect(px + 2, py - 1, 3, 1, col, true)
+      tc:rect(px - 5, py, 11, 2, col, true)
+      tc:rect(px - 4, py + 2, 3, 1, col, true)
+      tc:rect(px, py + 2, 1, 1, col, true)
+      tc:rect(px + 2, py + 2, 3, 1, col, true)
+      tc:rect(px - 1, py + 3, 3, 2, col, true)
+      tc:rect(px - 3, py + 5, 7, 1, col, true)
+    end
+    return
+  end
+
+  -- High-DPI scalable pips (r >= 6 on T-Display P4 AMOLED / LCD) using rect scanlines only
   if suit == 1 then -- Spade
     local body_bot = I(r * 0.25)
     local span = math.max(1, r + body_bot)
@@ -1211,11 +1311,11 @@ local function draw_suit_pip(x, y, suit, r)
       local hw = I(((dy + r) * r) / span)
       tc:rect(px - hw, py + dy, hw * 2 + 1, step, col, true)
     end
-    local lr = math.max(1, I(r * 0.36))
-    local lx = math.max(1, I(r * 0.42))
+    local lr = math.max(2, I(r * 0.36))
+    local lx = math.max(2, I(r * 0.42))
     local ly = I(r * 0.22)
-    tc:circle(px - lx, py + ly, lr, col, true)
-    tc:circle(px + lx, py + ly, lr, col, true)
+    fill_disk(tc, px - lx, py + ly, lr, col, step)
+    fill_disk(tc, px + lx, py + ly, lr, col, step)
     local stem_w = math.max(1, I(r * 0.22) * 2 + 1)
     local stem_top = I(r * 0.25)
     tc:rect(px - I(stem_w / 2), py + stem_top, stem_w, math.max(2, r - stem_top + 1), col, true)
@@ -1223,11 +1323,11 @@ local function draw_suit_pip(x, y, suit, r)
     tc:rect(px - base_hw, py + r, base_hw * 2 + 1, math.max(1, I(r * 0.18)), col, true)
 
   elseif suit == 2 then -- Heart
-    local lr = math.max(1, I(r * 0.46))
-    local lx = math.max(1, I(r * 0.46))
+    local lr = math.max(2, I(r * 0.46))
+    local lx = math.max(2, I(r * 0.46))
     local ly = I(r * 0.32)
-    tc:circle(px - lx, py - ly, lr, col, true)
-    tc:circle(px + lx, py - ly, lr, col, true)
+    fill_disk(tc, px - lx, py - ly, lr, col, step)
+    fill_disk(tc, px + lx, py - ly, lr, col, step)
     local top_dy = -I(r * 0.18)
     local span = math.max(1, r - top_dy)
     for dy = top_dy, r, step do
@@ -1237,18 +1337,18 @@ local function draw_suit_pip(x, y, suit, r)
 
   elseif suit == 3 then -- Diamond
     for dy = -r, r, step do
-      local hw = math.max(0, r - math.abs(dy))
+      local hw = math.max(0, I((r - math.abs(dy)) * 0.85))
       tc:rect(px - hw, py + dy, hw * 2 + 1, step, col, true)
     end
 
   else -- Club
-    local lr = math.max(1, I(r * 0.38))
+    local lr = math.max(2, I(r * 0.38))
     local lx = math.max(2, I(r * 0.48))
     local ty = I(r * 0.48)
     local by = I(r * 0.14)
-    tc:circle(px, py - ty, lr, col, true)
-    tc:circle(px - lx, py + by, lr, col, true)
-    tc:circle(px + lx, py + by, lr, col, true)
+    fill_disk(tc, px, py - ty, lr, col, step)
+    fill_disk(tc, px - lx, py + by, lr, col, step)
+    fill_disk(tc, px + lx, py + by, lr, col, step)
     local stem_w = math.max(1, I(r * 0.22) * 2 + 1)
     tc:rect(px - I(stem_w / 2), py - I(r * 0.1), stem_w, math.max(2, r + I(r * 0.1) + 1), col, true)
     local base_hw = math.max(2, I(r * 0.52))
@@ -1261,7 +1361,7 @@ local function draw_card_box(x, y, cw, ch, card, hidden, pip_sm_ov, pip_lg_ov)
   x, y, cw, ch = I(x), I(y), I(cw), I(ch)
   local rad = cw >= 64 and 8 or 3
   local shad = cw >= 64 and 3 or 1
-  cv:rect(x + shad, y + shad, cw, ch, COL_CARD_SHAD, true, rad)
+  cv:rect(x - 1, y + shad, cw + shad + 1, ch, COL_CARD_SHAD, true, rad)
 
   if hidden or not card then
     local pad1 = cw >= 64 and 3 or 1
@@ -1270,14 +1370,15 @@ local function draw_card_box(x, y, cw, ch, card, hidden, pip_sm_ov, pip_lg_ov)
     cv:rect(x + pad1, y + pad1, cw - pad1 * 2, ch - pad1 * 2, COL_CARD_BACK, true, math.max(2, rad - 1))
     if cw >= 26 then
       cv:rect(x + pad2, y + pad2, cw - pad2 * 2, ch - pad2 * 2, COL_CARD_TRIM, false, math.max(2, rad - 2))
-      local er = math.max(4, I(cw * 0.15))
-      cv:circle(I(x + cw / 2), I(y + ch / 2), er, COL_GOLD, false)
+      local ew = math.max(6, I(cw * 0.28))
+      local eh = math.max(6, I(ch * 0.22))
+      cv:rect(I(x + (cw - ew) / 2), I(y + (ch - eh) / 2), ew, eh, COL_GOLD, false, 2)
     end
     return
   end
 
   cv:rect(x, y, cw, ch, COL_CARD_BG, true, rad)
-  cv:rect(x, y, cw, ch, 0xCBD2D9, false, rad)
+  cv:rect(x, y, cw, ch, 0x64748B, false, rad)
 
   local col = (card.s == 2 or card.s == 3) and COL_RED or COL_BLACK
   local rstr = RANKS[card.r]
@@ -1675,14 +1776,15 @@ draw_screen = function()
     -- 3. Bottom Player Row
     local py = mid_y + cc_h + v_pad
     local p = seats[1]
-    local hc_overlap = DEV.scale >= 2 and I(L.p_cw * 0.82) or 30
+    local hc_w = DEV.scale >= 2 and L.p_cw or 34
+    local hc_step = DEV.scale >= 2 and (hc_w + 8) or 36
 
     if #p.cards == 2 then
-      draw_card_box(h_pad + 2, py, L.p_cw, L.p_ch, p.cards[1], false)
-      draw_card_box(h_pad + 2 + hc_overlap, py, L.p_cw, L.p_ch, p.cards[2], false)
+      draw_card_box(h_pad, py, hc_w, L.p_ch, p.cards[1], false)
+      draw_card_box(h_pad + hc_step, py, hc_w, L.p_ch, p.cards[2], false)
     end
 
-    local info_x = h_pad + 2 + hc_overlap + L.p_cw + (DEV.scale >= 2 and 16 or 7)
+    local info_x = h_pad + hc_step + hc_w + (DEV.scale >= 2 and 16 or 6)
     local info_w = W - info_x - h_pad
     local info_h = L.p_ch - (DEV.scale >= 2 and 0 or 4)
     local info_y = py + (DEV.scale >= 2 and 0 or 2)
@@ -1723,18 +1825,52 @@ draw_screen = function()
 
   local nb = #active_btns
   if nb > 0 then
-    local gap = L.btn_gap
+    local gap = (DEV.scale < 2 and nb >= 5) and 3 or L.btn_gap
     local pad_v = DEV.scale >= 2 and 8 or 3
-    local bw = I((W - gap * (nb + 1)) / nb)
+    local avail_w = W - gap * (nb + 1)
     local bh = bot_h - pad_v * 2
     local btn_fsz = DEV.scale >= 2 and L.f_md or L.f_sm
     local btn_lh  = text_h(btn_fsz)
     local btn_rad = DEV.scale >= 2 and 8 or 4
+    local min_pad = DEV.scale >= 2 and 20 or 8
+
+    local weights = {}
+    local lbls = {}
+    local tws = {}
+    local total_wt = 0
+    local widest_i = 1
 
     for i = 1, nb do
       local b = active_btns[i]
-      local bx = gap + (i - 1) * (bw + gap)
+      local lbl = b.label
+      local tw = text_w(lbl, btn_fsz)
+      local wt = math.max(b.weight or 60, tw + min_pad)
+      weights[i] = wt
+      lbls[i] = lbl
+      tws[i] = tw
+      total_wt = total_wt + wt
+      if wt > weights[widest_i] then
+        widest_i = i
+      end
+    end
+
+    local bws = {}
+    local used_w = 0
+    for i = 1, nb do
+      bws[i] = I((avail_w * weights[i]) / total_wt)
+      used_w = used_w + bws[i]
+    end
+    if used_w < avail_w then
+      bws[widest_i] = bws[widest_i] + (avail_w - used_w)
+    end
+
+    local cur_bx = gap
+    for i = 1, nb do
+      local b = active_btns[i]
+      local bw = bws[i]
+      local bx = cur_bx
       local bby = by + pad_v
+      cur_bx = cur_bx + bw + gap
       b.x, b.y, b.w, b.h = bx, bby, bw, bh
 
       local bg = not b.enabled and COL_BTN_DIS or (b.primary and COL_BTN_ACT or COL_BTN)
@@ -1747,8 +1883,8 @@ draw_screen = function()
       end
 
       local tcol = not b.enabled and COL_TEXT_DIM or (b.primary and COL_GOLD or C.text)
-      local lbl = b.label
-      local tw = text_w(lbl, btn_fsz)
+      local lbl = lbls[i]
+      local tw = tws[i]
       if tw > bw - 6 and lbl:find(" %[") then
         lbl = lbl:gsub(" %[.*%]", "")
         tw = text_w(lbl, btn_fsz)
