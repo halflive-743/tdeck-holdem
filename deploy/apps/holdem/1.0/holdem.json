@@ -1,1 +1,1 @@
-{"id":"holdem","name":"Texas Hold'em","ver":"1.0","desc":"No-Limit Texas Hold'em Poker (4-Max vs 3 AI bots) with blinds, side pots, live hand evaluator, and persistent bankroll.","icon":"game"}
+{"id":"holdem","name":"Texas Hold'em","ver":"1.0","desc":"No-Limit Texas Hold'em Poker (4-Max vs 3 AI bots) with blinds, side pots, live hand evaluator, and auto-scaling UI for T-Deck & T-Display P4 (AMOLED/LCD).","icon":"game"}

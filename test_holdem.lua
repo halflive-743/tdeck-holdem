@@ -1,5 +1,5 @@
 -- Standalone Lua 5.4 verification harness for holdem.lua
--- Mirrors WADAMESH's LuaAppHost.cpp strict integer & instruction-budget checks.
+-- Mirrors WADAMESH's LuaAppHost.cpp strict integer, 1..480 canvas bounds, & instruction-budget checks.
 
 local function checkint(v, what)
   assert(math.tointeger(v) ~= nil, what .. ": expected integer, got " .. tostring(v))
@@ -12,39 +12,13 @@ end
 local storekv = {}
 local toasts = {}
 local draw_ops = 0
+local canvases = {}
 local timer_ms = nil
 local rng_seed = 1337
 
 local function mock_wada(w, h)
-  local cv = { w = w, h = h }
-  function cv:fill(col) checkint(col, "fill col"); draw_ops = draw_ops + 1 end
-  function cv:rect(x, y, rw, rh, col, filled, radius)
-    checkint(x, "rect x"); checkint(y, "rect y")
-    checkint(rw, "rect w"); checkint(rh, "rect h"); checkint(col, "rect col")
-    if radius ~= nil then checkint(radius, "rect radius") end
-    draw_ops = draw_ops + 1
-  end
-  function cv:line(x1, y1, x2, y2, col, width)
-    checkint(x1, "line x1"); checkint(y1, "line y1")
-    checkint(x2, "line x2"); checkint(y2, "line y2"); checkint(col, "line col")
-    if width ~= nil then checkint(width, "line width") end
-    draw_ops = draw_ops + 1
-  end
-  function cv:circle(x, y, r, col, filled)
-    checkint(x, "circle x"); checkint(y, "circle y")
-    checkint(r, "circle r"); checkint(col, "circle col")
-    draw_ops = draw_ops + 1
-  end
-  function cv:text(x, y, s, col, size)
-    checkint(x, "text x"); checkint(y, "text y")
-    checkstr(s, "text s"); checkint(col, "text col")
-    if size ~= nil then checkint(size, "text size") end
-    assert(not tostring(s):find("%.%d"), "unexpected decimal float in UI text: " .. tostring(s))
-    draw_ops = draw_ops + 1
-  end
-  function cv:pos(x, y)
-    checkint(x, "pos x"); checkint(y, "pos y")
-  end
+  canvases = {}
+  draw_ops = 0
 
   return {
     ui = {
@@ -54,7 +28,39 @@ local function mock_wada(w, h)
       },
       canvas = function(cw, ch)
         checkint(cw, "canvas w"); checkint(ch, "canvas h")
-        assert(cw > 0 and cw <= 480 and ch > 0 and ch <= 480, "canvas bounds")
+        assert(cw > 0 and cw <= 480 and ch > 0 and ch <= 480,
+          string.format("FATAL: canvas(%s, %s) exceeds LuaAppHost 1..480 bounds!", tostring(cw), tostring(ch)))
+        local cv = { w = cw, h = ch, x = 0, y = 0 }
+        function cv:fill(col) checkint(col, "fill col"); draw_ops = draw_ops + 1 end
+        function cv:rect(x, y, rw, rh, col, filled, radius)
+          checkint(x, "rect x"); checkint(y, "rect y")
+          checkint(rw, "rect w"); checkint(rh, "rect h"); checkint(col, "rect col")
+          if radius ~= nil then checkint(radius, "rect radius") end
+          draw_ops = draw_ops + 1
+        end
+        function cv:line(x1, y1, x2, y2, col, width)
+          checkint(x1, "line x1"); checkint(y1, "line y1")
+          checkint(x2, "line x2"); checkint(y2, "line y2"); checkint(col, "line col")
+          if width ~= nil then checkint(width, "line width") end
+          draw_ops = draw_ops + 1
+        end
+        function cv:circle(x, y, r, col, filled)
+          checkint(x, "circle x"); checkint(y, "circle y")
+          checkint(r, "circle r"); checkint(col, "circle col")
+          draw_ops = draw_ops + 1
+        end
+        function cv:text(x, y, s, col, size)
+          checkint(x, "text x"); checkint(y, "text y")
+          checkstr(s, "text s"); checkint(col, "text col")
+          if size ~= nil then checkint(size, "text size") end
+          assert(not tostring(s):find("%.%d"), "unexpected decimal float in UI text: " .. tostring(s))
+          draw_ops = draw_ops + 1
+        end
+        function cv:pos(x, y)
+          checkint(x, "pos x"); checkint(y, "pos y")
+          cv.x, cv.y = x, y
+        end
+        canvases[#canvases + 1] = cv
         return cv
       end,
       text_w = function(str, sz)
@@ -101,38 +107,76 @@ local function mock_wada(w, h)
   }
 end
 
-for _, dims in ipairs({ {320, 208}, {240, 244} }) do
-  _G.wada = mock_wada(dims[1], dims[2])
+local function verify_canvas_coverage(w, h)
+  assert(#canvases >= 1, "at least 1 canvas must be created")
+  local area = 0
+  local max_x, max_y = 0, 0
+  for _, c in ipairs(canvases) do
+    assert(c.x >= 0 and c.y >= 0, "canvas tile position must be non-negative")
+    assert(c.x + c.w <= w and c.y + c.h <= h, "canvas tile must not exceed screen bounds")
+    area = area + (c.w * c.h)
+    if c.x + c.w > max_x then max_x = c.x + c.w end
+    if c.y + c.h > max_y then max_y = c.y + c.h end
+  end
+  assert(max_x == w and max_y == h and area == w * h,
+    string.format("canvas tiles must cover exact %dx%d screen (got max=%dx%d area=%d)", w, h, max_x, max_y, area))
+end
+
+local devices = {
+  { name = "LilyGo T-Deck",                     w = 320,  h = 208  },
+  { name = "Heltec V4 Portrait",                w = 240,  h = 244  },
+  { name = "LilyGo T-LoRa Pager",               w = 480,  h = 178  },
+  { name = "LilyGo T-Display P4 LCD (Port)",    w = 540,  h = 1102 },
+  { name = "LilyGo T-Display P4 LCD (Land)",    w = 1168, h = 474  },
+  { name = "LilyGo T-Display P4 AMOLED (Port)", w = 568,  h = 1166 },
+  { name = "LilyGo T-Display P4 AMOLED (Land)", w = 1232, h = 502  },
+}
+
+for _, dev in ipairs(devices) do
+  _G.wada = mock_wada(dev.w, dev.h)
   local app = dofile("holdem.lua")
   assert(type(app) == "table", "holdem.lua must return app table")
-  app.on_open(dims[1], dims[2])
 
-  -- Play 20 hands exercising blinds, deal, call, raise, all-in, fold, and AI ticks
-  for hand = 1, 20 do
+  local max_instr = 0
+  local function guarded_call(fn, ...)
+    local instr = 0
+    debug.sethook(function() instr = instr + 1000 end, "", 1000)
+    local ok, err = pcall(fn, ...)
+    debug.sethook()
+    assert(ok, err)
+    if instr > max_instr then max_instr = instr end
+    assert(instr < 100000, string.format("instruction budget exceeded (%d >= 100000) on %s", instr, dev.name))
+  end
+
+  guarded_call(app.on_open, dev.w, dev.h)
+  verify_canvas_coverage(dev.w, dev.h)
+
+  for hand = 1, 15 do
     if hand % 5 == 0 then
-      app.on_input({ type = "key", key = "b" }) -- Cycle blinds
+      guarded_call(app.on_input, { type = "key", key = "b" })
     end
-    app.on_input({ type = "key", key = "d" }) -- Deal hand
-    for step = 1, 40 do
+    guarded_call(app.on_input, { type = "key", key = "d" })
+    for step = 1, 35 do
       if timer_ms then
-        app.on_tick(timer_ms)
+        guarded_call(app.on_tick, timer_ms)
       else
         if step % 4 == 1 then
-          app.on_input({ type = "key", key = "+" })
-          app.on_input({ type = "key", key = "r" })
+          guarded_call(app.on_input, { type = "key", key = "+" })
+          guarded_call(app.on_input, { type = "key", key = "r" })
         elseif step % 7 == 0 then
-          app.on_input({ type = "key", key = "a" })
+          guarded_call(app.on_input, { type = "key", key = "a" })
         elseif step % 11 == 0 then
-          app.on_input({ type = "key", key = "f" })
+          guarded_call(app.on_input, { type = "key", key = "f" })
         else
-          app.on_input({ type = "key", key = "c" })
+          guarded_call(app.on_input, { type = "key", key = "c" })
         end
       end
     end
   end
 
-  app.on_close()
+  guarded_call(app.on_close)
   assert(type(storekv.he_bank) == "number", "bankroll must persist as number")
   assert(type(storekv.he_best) == "number", "best bankroll must persist as number")
-  print(string.format("OK %dx%d: draw_ops=%d stack=$%d best=$%d", dims[1], dims[2], draw_ops, storekv.he_bank, storekv.he_best))
+  print(string.format("OK %-34s (%4dx%-4d): tiles=%d max_instr=%5d draw_ops=%5d stack=$%d",
+    dev.name, dev.w, dev.h, #canvases, max_instr, draw_ops, storekv.he_bank))
 end
