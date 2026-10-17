@@ -6,7 +6,7 @@ A **No-Limit Texas Hold'em Poker** application built for **LilyGo T-Display P4 (
 
 - [`holdem.lua`](holdem.lua) — Standalone Lua app ready to copy to your device.
 - [`holdem.json`](holdem.json) — WADAMESH app drawer / Store manifest.
-- [`deploy/apps/holdem/1.0/`](deploy/apps/holdem/1.0) — Structured for USB serial sideloading (`scripts/sideload_app.py`) or submitting to the WADAMESH Store.
+- [`deploy/apps/holdem/1.1/`](deploy/apps/holdem/1.1) — Structured for USB serial sideloading (`scripts/sideload_app.py`) or submitting to the WADAMESH Store.
 - [`holdem_simulator.html`](holdem_simulator.html) — Interactive desktop browser simulator.
 - [`test_holdem.lua`](test_holdem.lua) — Automated SDK constraint, instruction budget, and multi-device verification script.
 
@@ -57,7 +57,7 @@ A **No-Limit Texas Hold'em Poker** application built for **LilyGo T-Display P4 (
 
 ### Option 2: USB Serial Sideload
 ```bash
-python scripts/sideload_app.py --port COM3 --reboot deploy/apps/holdem/1.0
+python scripts/sideload_app.py --port COM3 --reboot deploy/apps/holdem/1.1
 ```
 
 ---

@@ -1,2055 +1,641 @@
--- Texas Hold'em Poker — WADAMESH Lua app for LilyGo T-Deck, T-Display P4 (AMOLED & LCD), & MeshCore boards
--- No-Limit 4-Max Table (You vs. 3 AI Bots: TEX, VIPER, DUKE)
--- Controls:
---   Touch:     Tap any bottom-bar button, tap during AI turn to fast-forward, tap table after hand to deal
---   Keyboard:  [F] Fold  [C] Check/Call  [R] Bet/Raise  [A] All-In  [D/H] Deal
---              [W/Up/+] Increase Raise  [Z/Down/-] Decrease Raise  [B] Cycle Blinds  [N] New Table  [M] Mute
---   Trackball: Left/Right cycle buttons, Up/Down adjust raise size, Click to activate focused button
-
-local ui, sys, store, timer = wada.ui, wada.sys, wada.store, wada.timer
-local C = ui.colors
-
-local app = {}
-
--- Screen, device profile & layout metrics
-local W, H = 320, 208
-local cv
-local MAX_CANVAS_DIM = 480 -- LuaAppHost.cpp enforces 1..480 per wada.ui.canvas call
-
-local DEV = {
-  id = "tdeck",
-  name = "T-Deck",
-  is_p4 = false,
-  portrait = false,
-  scale = 1,
-}
-
-local L = {
-  top_h = 20,
-  bot_h = 30,
-  table_h = 158,
-  cc_w = 37,
-  cc_h = 48,
-  cc_gap = 5,
-  p_cw = 37,
-  p_ch = 48,
-  pip_sm = 3,
-  pip_lg = 5,
-  f_xs = 10,
-  f_sm = 11,
-  f_md = 12,
-  f_lg = 14,
-  f_xl = 16,
-  f_rank = 12,
-  lh_xs = 14,
-  lh_sm = 15,
-  lh_md = 16,
-  lh_lg = 18,
-  lh_xl = 20,
-  lh_rank = 16,
-  pad = 6,
-  btn_gap = 4,
-}
-
--- Palette tailored for WadaMesh dark UI & casino felt
-local COL_FELT       = 0x0B2B1E
-local COL_FELT_DARK  = 0x082016
-local COL_FELT_LINE  = 0x164A35
-local COL_TOPBAR     = 0x0E1318
-local COL_BOTBAR     = 0x0E1318
-local COL_POD_BG     = 0x101820
-local COL_POD_FOLD   = 0x0A1214
-local COL_CARD_BG    = 0xF5F7FA
-local COL_CARD_SHAD  = 0x06150E
-local COL_CARD_BACK  = 0x1B4F8A
-local COL_CARD_TRIM  = 0x4A8FE7
-local COL_RED        = 0xD9383A
-local COL_BLACK      = 0x181C24
-local COL_GOLD       = 0xF2C14E
-local COL_BTN        = 0x1A222B
-local COL_BTN_ACT    = 0x1E3A3A
-local COL_BTN_DIS    = 0x11161C
-local COL_TEXT_DIM   = 0x525A65
-
--- Game constants
-local START_STACK = 500
-local BLIND_LEVELS = {
-  { sb = 5,  bb = 10 },
-  { sb = 10, bb = 20 },
-  { sb = 25, bb = 50 },
-}
-local blind_idx = 1
-
-local RANKS = { "A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K" }
-local HAND_NAMES = {
-  [0] = "HIGH CARD",
-  [1] = "ONE PAIR",
-  [2] = "TWO PAIR",
-  [3] = "3 OF A KIND",
-  [4] = "STRAIGHT",
-  [5] = "FLUSH",
-  [6] = "FULL HOUSE",
-  [7] = "4 OF A KIND",
-  [8] = "STR. FLUSH",
-  [9] = "ROYAL FLUSH",
-}
-
--- Persistent stats
-local best_bank = START_STACK
-local hands_won = 0
-local hands_played = 0
-local sound_on = true
-
--- Table & round state
--- state: "title" | "player" | "ai" | "done"
-local state = "title"
-local street = 0 -- 0=PRE-FLOP, 1=FLOP, 2=TURN, 3=RIVER, 4=SHOWDOWN
-local STREET_NAMES = { [0] = "PRE-FLOP", [1] = "FLOP", [2] = "TURN", [3] = "RIVER", [4] = "SHOWDOWN" }
-
-local deck = {}
-local deck_top = 0
-local board = {}
-local pot = 0
-local cur_bet = 0
-local min_raise = 10
-local raise_to = 20
-local dealer_seat = 1
-local turn_seat = 1
-local last_aggressor = 0
-local show_all_cards = false
-
-local banner_title = ""
-local banner_sub = ""
-local banner_col = 0x15B6A6
-
--- 4 Seats: 1=YOU (bottom), 2=TEX (left), 3=VIPER (center), 4=DUKE (right)
-local seats = {
-  { name = "YOU",   is_human = true,  style = "human", stack = START_STACK, cards = {}, street_bet = 0, total_bet = 0, folded = false, all_in = false, acted = false, status = "", role = "" },
-  { name = "TEX",   is_human = false, style = "loose", stack = START_STACK, cards = {}, street_bet = 0, total_bet = 0, folded = false, all_in = false, acted = false, status = "", role = "" },
-  { name = "VIPER", is_human = false, style = "tag",   stack = START_STACK, cards = {}, street_bet = 0, total_bet = 0, folded = false, all_in = false, acted = false, status = "", role = "" },
-  { name = "DUKE",  is_human = false, style = "lag",   stack = START_STACK, cards = {}, street_bet = 0, total_bet = 0, folded = false, all_in = false, acted = false, status = "", role = "" },
-}
-
--- Bottom bar interactive buttons
-local active_btns = {}
-local focus_idx = 1
-
--- Strict integer helper (LuaAppHost.cpp requires integers for all canvas coords)
-local function I(x)
-  return math.floor(tonumber(x) or 0)
+local TIT_T,SUB_T="TEXAS HOLD'EM","No-Limit 4-Max  ·  3 AI Opponents"
+-- Texas Hold'em Poker — WADAMESH Lua app for LilyGo T-Deck, T-Display P4, & MeshCore boards
+local ui,sys,store,timer=wada.ui,wada.sys,wada.store,wada.timer
+local C,fmt,flr,max,min,abs=ui.colors,string.format,math.floor,math.max,math.min,math.abs
+local app={}
+local W,H,cv=320,208,nil
+local dname,port,s2="T-Deck",false,false
+local top_h,bot_h,tbl_h,cc_w,cc_h,cc_g,p_cw,p_ch=20,30,158,37,48,5,37,48
+local p_sm,p_lg,f_xs,f_sm,f_md,f_lg,f_xl,f_rk=3,5,10,11,12,14,16,12
+local lh_xs,lh_sm,lh_md,lh_lg,lh_xl,pad,gap=14,15,16,18,20,6,4
+local K_FLT,K_FDK,K_FLN,K_BAR=0x0B2B1E,0x082016,0x164A35,0x0E1318
+local K_POD,K_PFD,K_CBG,K_CSH=0x101820,0x0A1214,0xF5F7FA,0x06150E
+local K_CBK,K_CTR,K_RED,K_BLK,K_GLD=0x1B4F8A,0x4A8FE7,0xD9383A,0x181C24,0xF2C14E
+local K_BTN,K_BAC,K_BDS,K_DIM=0x1A222B,0x1E3A3A,0x11161C,0x525A65
+local S0=500
+local BLINDS={{5,10},{10,20},{25,50}}
+local b_idx=1
+local RANKS={"A","2","3","4","5","6","7","8","9","10","J","Q","K"}
+local HNAMES={[0]="HIGH CARD","ONE PAIR","TWO PAIR","3 OF A KIND","STRAIGHT","FLUSH","FULL HOUSE","4 OF A KIND","STR. FLUSH","ROYAL FLUSH"}
+local SNAMES={[0]="PRE-FLOP","FLOP","TURN","RIVER","SHOWDOWN"}
+local best_b,h_won,h_play,snd=S0,0,0,true
+local state,street,show_all="title",0,false
+local deck,board,btns={},{},{}
+local d_top,pot,c_bet,min_r,r_to=0,0,0,10,20
+local dlr_s,trn_s,f_idx=1,1,1
+local b_tit,b_sub,b_col="","",0x15B6A6
+local seats={}
+for i,n in ipairs({"YOU","TEX","VIPER","DUKE"})do
+seats[i]={name=n,hum=(i==1),sty=({"h","l","t","g"})[i],stack=S0,cards={},sb=0,tb=0,fold=false,all=false,act=false,st="",role=""}
 end
-
-local function clamp(v, lo, hi)
-  if v < lo then return lo end
-  if v > hi then return hi end
-  return v
+local function I(x)return flr(tonumber(x)or 0)end
+local function clp(v,l,h)return v<l and l or(v>h and h or v)end
+local function sfx()if snd and sys.beep then pcall(sys.beep)end end
+local function rint(l,h)
+l,h=I(l),I(h);if h<=l then return l end
+local r=sys.random(l,h)
+return I((r<l or r>h)and(l+(abs(r)%(h-l+1)))or r)
 end
-
-local function sfx()
-  if sound_on and sys.beep then
-    pcall(sys.beep)
-  end
+local function tw(s,z)s,z=tostring(s or""),I(z or f_sm);return ui.text_w and I(ui.text_w(s,z))or I(#s*(z+4)*0.48)end
+local function th(z)z=I(z or f_sm);return ui.text_h and I(ui.text_h(z))or(z+4)end
+local function tcx(x,y,s,c,z)cv:text(I(x-tw(s,z)/2),y,s,c,z)end
+local function box(x,y,w,h,bg,fg,r)cv:rect(x,y,w,h,bg,true,r);if fg then cv:rect(x,y,w,h,fg,false,r)end end
+local function layout()
+local s,l=min(W,H),max(W,H);port=(H>W)
+if l>=1185 or(W==568 and H>=900)or(W>=1185 and H>=460)then dname,s2="T-Display P4 AMOLED",true
+elseif(l>=1050 and l<1185)or(W==540 and H>=900)or(W>=500 and W<560 and H>=900)then dname,s2="T-Display P4 LCD",true
+elseif l>=700 or s>=460 then dname,s2="Large HD",true
+else dname,s2=(W>=440 and H<320)and"Wide Compact"or((port and W<=260)and"Compact Portrait"or"T-Deck"),false end
+if s2 then f_xs,f_sm,f_md,f_lg,f_xl,f_rk=14,14,16,20,24,16 else f_xs,f_sm,f_md,f_lg,f_xl,f_rk=10,11,12,14,16,12 end
+lh_xs,lh_sm,lh_md,lh_lg,lh_xl=th(f_xs),th(f_sm),th(f_md),th(f_lg),th(f_xl)
+if s2 then top_h,bot_h,pad,gap=I(max(lh_md+16,40)),port and I(max(lh_md+42,72))or I(max(lh_md+26,54)),14,8
+else top_h,bot_h,pad,gap=20,30,6,4 end
+tbl_h=max(80,H-top_h-bot_h)
+if port and s2 then
+cc_g=10;cc_w=I(clp((W-36-cc_g*4)/5,86,98));cc_h=I(cc_w*1.4)
+p_cw=I(clp(W*0.175,92,104));p_ch=I(p_cw*1.4);p_sm,p_lg=6,13
+elseif s2 then
+cc_h=I(clp(tbl_h*0.3,88,120));cc_w=I(cc_h*0.74);cc_g,p_cw,p_ch,p_sm,p_lg=12,cc_w,cc_h,5,11
+elseif port then
+cc_g=4;cc_w=I(clp((W-16-cc_g*4)/5,34,40));cc_h=I(clp(cc_w*1.32,44,52));p_cw,p_ch,p_sm,p_lg=35,46,3,5
+else
+cc_h=clp(I(tbl_h*0.3),40,48);cc_w=clp(I(cc_h*0.77),32,37);cc_g,p_cw,p_ch,p_sm,p_lg=5,cc_w,cc_h,3,5
 end
-
--- Safe RNG wrapper: LuaAppHost.cpp sysRandom(lo, hi) requires hi > lo
-local function rand_int(lo, hi)
-  lo, hi = I(lo), I(hi)
-  if hi <= lo then return lo end
-  local r = sys.random(lo, hi)
-  if r < lo or r > hi then
-    r = lo + (math.abs(r) % (hi - lo + 1))
-  end
-  return I(r)
 end
-
-local function text_w(str, sz)
-  local s = tostring(str or "")
-  local fsz = I(sz or L.f_sm)
-  if ui.text_w then
-    return I(ui.text_w(s, fsz))
-  end
-  return I(#s * (fsz + 4) * 0.48)
+local function make_cv(w,h)
+w,h=I(w),I(h)
+if w<=480 and h<=480 then local s=ui.canvas(w,h);s:pos(0,0);return s end
+local nx,ny=math.ceil(w/480),math.ceil(h/480)
+local bw,bh,ts=I(math.ceil(w/nx)),I(math.ceil(h/ny)),{}
+for ry=0,ny-1 do
+local ty,th_t=ry*bh,min(bh,h-ry*bh)
+for cx=0,nx-1 do
+local tx,tw_t=cx*bw,min(bw,w-cx*bw)
+if tw_t>0 and th_t>0 then local tc=ui.canvas(tw_t,th_t);tc:pos(tx,ty);ts[#ts+1]={c=tc,x=tx,y=ty,x2=tx+tw_t,y2=ty+th_t}end
 end
-
-local function text_h(sz)
-  local fsz = I(sz or L.f_sm)
-  if ui.text_h then
-    return I(ui.text_h(fsz))
-  end
-  return fsz + 4
 end
-
--- Auto-detect WADAMESH device (T-Display P4 AMOLED, T-Display P4 LCD, T-Deck, Heltec V4, Pager, etc.)
-local function detect_device(w, h)
-  local short_side = math.min(w, h)
-  local long_side  = math.max(w, h)
-  local portrait   = (h > w)
-
-  if long_side >= 1185 or (w == 568 and h >= 900) or (w >= 1185 and h >= 460) then
-    DEV = { id = "p4_amoled", name = "T-Display P4 AMOLED", is_p4 = true, portrait = portrait, scale = 2 }
-  elseif (long_side >= 1050 and long_side < 1185) or (w == 540 and h >= 900) or (w >= 500 and w < 560 and h >= 900) then
-    DEV = { id = "p4_lcd", name = "T-Display P4 LCD", is_p4 = true, portrait = portrait, scale = 2 }
-  elseif long_side >= 700 or short_side >= 460 then
-    DEV = { id = "large_hd", name = "Large HD", is_p4 = false, portrait = portrait, scale = 2 }
-  elseif w >= 440 and h < 320 then
-    DEV = { id = "pager", name = "Wide Compact", is_p4 = false, portrait = false, scale = 1 }
-  elseif portrait and w <= 260 then
-    DEV = { id = "v4_portrait", name = "Compact Portrait", is_p4 = false, portrait = true, scale = 1 }
-  else
-    DEV = { id = "tdeck", name = "T-Deck", is_p4 = false, portrait = portrait, scale = 1 }
-  end
+local v={tiles=ts}
+function v:fill(c)c=I(c);for i=1,#ts do ts[i].c:fill(c)end end
+function v:rect(x,y,rw,rh,c,f,r)
+x,y,rw,rh,c=x-(x%1),y-(y%1),rw-(rw%1),rh-(rh%1),c-(c%1)
+local rd,x2,y2=r~=nil and(r-(r%1))or nil,x+rw,y+rh
+for i=1,#ts do
+local t=ts[i]
+if x2>t.x and x<t.x2 and y2>t.y and y<t.y2 then
+if rd~=nil then t.c:rect(x-t.x,y-t.y,rw,rh,c,f,rd)else t.c:rect(x-t.x,y-t.y,rw,rh,c,f)end
 end
-
-local function compute_layout()
-  detect_device(W, H)
-
-  if DEV.scale >= 2 then
-    L.f_xs   = 14
-    L.f_sm   = 14
-    L.f_md   = 16
-    L.f_lg   = 20
-    L.f_xl   = 24
-    L.f_rank = 16
-  else
-    L.f_xs   = 10
-    L.f_sm   = 11
-    L.f_md   = 12
-    L.f_lg   = 14
-    L.f_xl   = 16
-    L.f_rank = 12
-  end
-
-  L.lh_xs   = text_h(L.f_xs)
-  L.lh_sm   = text_h(L.f_sm)
-  L.lh_md   = text_h(L.f_md)
-  L.lh_lg   = text_h(L.f_lg)
-  L.lh_xl   = text_h(L.f_xl)
-  L.lh_rank = text_h(L.f_rank)
-
-  if DEV.scale >= 2 then
-    L.top_h   = I(math.max(L.lh_md + 16, 40))
-    L.bot_h   = DEV.portrait and I(math.max(L.lh_md + 42, 72)) or I(math.max(L.lh_md + 26, 54))
-    L.pad     = 14
-    L.btn_gap = 8
-  else
-    L.top_h   = 20
-    L.bot_h   = 30
-    L.pad     = 6
-    L.btn_gap = 4
-  end
-
-  L.table_h = math.max(80, H - L.top_h - L.bot_h)
-
-  if DEV.portrait and DEV.scale >= 2 then
-    -- T-Display P4 Portrait (568x1166 AMOLED or 540x1102 LCD)
-    L.cc_gap = 10
-    L.cc_w   = I(clamp((W - 36 - L.cc_gap * 4) / 5, 86, 98))
-    L.cc_h   = I(L.cc_w * 1.40)
-    L.p_cw   = I(clamp(W * 0.175, 92, 104))
-    L.p_ch   = I(L.p_cw * 1.40)
-    L.pip_sm = 6
-    L.pip_lg = 13
-  elseif DEV.scale >= 2 then
-    -- T-Display P4 Landscape (1232x502 or 1168x474)
-    L.cc_h   = I(clamp(L.table_h * 0.30, 88, 120))
-    L.cc_w   = I(L.cc_h * 0.74)
-    L.cc_gap = 12
-    L.p_cw   = L.cc_w
-    L.p_ch   = L.cc_h
-    L.pip_sm = 5
-    L.pip_lg = 11
-  elseif DEV.portrait then
-    -- Compact Portrait (Heltec V4 240x244)
-    L.cc_gap = 4
-    L.cc_w   = I(clamp((W - 16 - L.cc_gap * 4) / 5, 34, 40))
-    L.cc_h   = I(clamp(L.cc_w * 1.32, 44, 52))
-    L.p_cw   = 35
-    L.p_ch   = 46
-    L.pip_sm = 3
-    L.pip_lg = 5
-  else
-    -- LilyGo T-Deck (320x208) & Wide Compact (Pager 480x178)
-    L.cc_h   = clamp(I(L.table_h * 0.30), 40, 48)
-    L.cc_w   = clamp(I(L.cc_h * 0.77), 32, 37)
-    L.cc_gap = 5
-    L.p_cw   = L.cc_w
-    L.p_ch   = L.cc_h
-    L.pip_sm = 3
-    L.pip_lg = 5
-  end
 end
-
--- Create a full-screen canvas matching (W, H) without violating LuaAppHost.cpp's
--- 1..480 per-canvas dimension check on large displays like the LilyGo T-Display P4.
-local function create_screen_canvas(w, h)
-  w, h = I(w), I(h)
-  if w <= MAX_CANVAS_DIM and h <= MAX_CANVAS_DIM then
-    local single = ui.canvas(w, h)
-    single:pos(0, 0)
-    return single
-  end
-
-  local nx = math.ceil(w / MAX_CANVAS_DIM)
-  local ny = math.ceil(h / MAX_CANVAS_DIM)
-  local base_tw = I(math.ceil(w / nx))
-  local base_th = I(math.ceil(h / ny))
-
-  local tiles = {}
-  for ry = 0, ny - 1 do
-    local ty = ry * base_th
-    local th = math.min(base_th, h - ty)
-    for cx = 0, nx - 1 do
-      local tx = cx * base_tw
-      local tw = math.min(base_tw, w - tx)
-      if tw > 0 and th > 0 then
-        local tc = ui.canvas(tw, th)
-        tc:pos(tx, ty)
-        tiles[#tiles + 1] = {
-          c  = tc,
-          x  = tx,
-          y  = ty,
-          w  = tw,
-          h  = th,
-          x2 = tx + tw,
-          y2 = ty + th,
-        }
-      end
-    end
-  end
-
-  local vcv = { w = w, h = h, tiles = tiles }
-
-  function vcv:pos(px, py)
-    px, py = I(px), I(py)
-    for i = 1, #tiles do
-      local t = tiles[i]
-      t.c:pos(px + t.x, py + t.y)
-    end
-  end
-
-  function vcv:fill(col)
-    col = I(col)
-    for i = 1, #tiles do
-      tiles[i].c:fill(col)
-    end
-  end
-
-  function vcv:rect(x, y, rw, rh, col, filled, radius)
-    x = x - (x % 1); y = y - (y % 1)
-    rw = rw - (rw % 1); rh = rh - (rh % 1)
-    col = col - (col % 1)
-    local rad = radius ~= nil and (radius - (radius % 1)) or nil
-    local rx2, ry2 = x + rw, y + rh
-    for i = 1, #tiles do
-      local t = tiles[i]
-      if rx2 > t.x and x < t.x2 and ry2 > t.y and y < t.y2 then
-        if rad ~= nil then
-          t.c:rect(x - t.x, y - t.y, rw, rh, col, filled, rad)
-        else
-          t.c:rect(x - t.x, y - t.y, rw, rh, col, filled)
-        end
-      end
-    end
-  end
-
-  function vcv:line(x1, y1, x2, y2, col, width)
-    x1 = x1 - (x1 % 1); y1 = y1 - (y1 % 1)
-    x2 = x2 - (x2 % 1); y2 = y2 - (y2 % 1)
-    col = col - (col % 1)
-    local lw = width ~= nil and (width - (width % 1)) or 1
-    local lx1 = (x1 < x2 and x1 or x2) - lw
-    local ly1 = (y1 < y2 and y1 or y2) - lw
-    local lx2 = (x1 > x2 and x1 or x2) + lw + 1
-    local ly2 = (y1 > y2 and y1 or y2) + lw + 1
-    for i = 1, #tiles do
-      local t = tiles[i]
-      if lx2 > t.x and lx1 < t.x2 and ly2 > t.y and ly1 < t.y2 then
-        t.c:line(x1 - t.x, y1 - t.y, x2 - t.x, y2 - t.y, col, lw)
-      end
-    end
-  end
-
-  function vcv:circle(x, y, r, col, filled)
-    x = x - (x % 1); y = y - (y % 1); r = r - (r % 1); col = col - (col % 1)
-    local cx1, cy1 = x - r - 2, y - r - 2
-    local cx2, cy2 = x + r + 2, y + r + 2
-    for i = 1, #tiles do
-      local t = tiles[i]
-      if cx2 > t.x and cx1 < t.x2 and cy2 > t.y and cy1 < t.y2 then
-        t.c:circle(x - t.x, y - t.y, r, col, filled)
-      end
-    end
-  end
-
-  local function draw_text_segment(x, y, s, col, sz)
-    x = x - (x % 1); y = y - (y % 1); col = col - (col % 1); sz = sz - (sz % 1)
-    local tw = text_w(s, sz)
-    local th = text_h(sz)
-    if tw > base_tw - 10 then
-      local mid = math.floor(#s / 2)
-      local split_pos = nil
-      for d = 0, mid - 1 do
-        if s:sub(mid + d, mid + d) == " " then split_pos = mid + d; break end
-        if mid - d >= 1 and s:sub(mid - d, mid - d) == " " then split_pos = mid - d; break end
-      end
-      if split_pos and split_pos > 1 and split_pos < #s then
-        local left_s = s:sub(1, split_pos - 1)
-        local right_s = s:sub(split_pos + 1)
-        draw_text_segment(x, y, left_s, col, sz)
-        draw_text_segment(x + text_w(left_s .. " ", sz), y, right_s, col, sz)
-        return
-      end
-    end
-    local tx2, ty2 = x + tw + 4, y + th + 4
-    for i = 1, #tiles do
-      local t = tiles[i]
-      if tx2 > t.x and x < t.x2 and ty2 > t.y and y < t.y2 then
-        t.c:text(x - t.x, y - t.y, s, col, sz)
-      end
-    end
-  end
-
-  function vcv:text(x, y, s, col, size)
-    draw_text_segment(x, y, tostring(s or ""), col, size or L.f_sm)
-  end
-
-  return vcv
 end
-
-local function get_blinds()
-  local b = BLIND_LEVELS[blind_idx] or BLIND_LEVELS[1]
-  return b.sb, b.bb
+function v:line(x1,y1,x2,y2,c,lw)
+x1,y1,x2,y2,c,lw=I(x1),I(y1),I(x2),I(y2),I(c),lw and I(lw)or 1
+local lx1,ly1,lx2,ly2=min(x1,x2)-lw,min(y1,y2)-lw,max(x1,x2)+lw+1,max(y1,y2)+lw+1
+for i=1,#ts do
+local t=ts[i]
+if lx2>t.x and lx1<t.x2 and ly2>t.y and ly1<t.y2 then t.c:line(x1-t.x,y1-t.y,x2-t.x,y2-t.y,c,lw)end
 end
-
--- Persistence & WadaMesh Home Screen Widget
+end
+local function seg(x,y,s,c,z)
+x,y,c,z=I(x),I(y),I(c),I(z or f_sm)
+local sw,sh=tw(s,z),th(z)
+if sw>bw-10 then
+local m,sp=flr(#s/2),nil
+for d=0,m-1 do
+if s:sub(m+d,m+d)==" "then sp=m+d;break end
+if m-d>=1 and s:sub(m-d,m-d)==" "then sp=m-d;break end
+end
+if sp and sp>1 and sp<#s then local ls=s:sub(1,sp-1);seg(x,y,ls,c,z);seg(x+tw(ls.." ",z),y,s:sub(sp+1),c,z);return end
+end
+for i=1,#ts do
+local t=ts[i]
+if x+sw+4>t.x and x<t.x2 and y+sh+4>t.y and y<t.y2 then t.c:text(x-t.x,y-t.y,s,c,z)end
+end
+end
+function v:text(x,y,s,c,z)seg(x,y,tostring(s or""),c,z)end
+return v
+end
+local function blinds()local b=BLINDS[b_idx]or BLINDS[1];return b[1],b[2]end
 local function save_stats()
-  local pstack = I(seats[1].stack)
-  if pstack > best_bank then
-    best_bank = pstack
-  end
-  store.set("he_bank", pstack)
-  store.set("he_best", I(best_bank))
-  store.set("he_wins", I(hands_won))
-  store.set("he_hands", I(hands_played))
-  store.set("he_blind", I(blind_idx))
-  if wada.widget and wada.widget.set then
-    local pct = hands_played > 0 and I((hands_won * 100) / hands_played) or 0
-    pcall(wada.widget.set, {
-      title = "Hold'em",
-      value = string.format("$%d", pstack),
-      line  = string.format("Peak $%d  ·  Won %d%% (%d/%d)", I(best_bank), pct, I(hands_won), I(hands_played))
-    })
-  end
+local ps=I(seats[1].stack);if ps>best_b then best_b=ps end
+store.set("he_bank",ps);store.set("he_best",I(best_b));store.set("he_wins",I(h_won));store.set("he_hands",I(h_play));store.set("he_blind",I(b_idx))
+if wada.widget and wada.widget.set then
+local pct=h_play>0 and I((h_won*100)/h_play)or 0
+pcall(wada.widget.set,{title="Hold'em",value=fmt("$%d",ps),line=fmt("Peak $%d  ·  Won %d%% (%d/%d)",I(best_b),pct,I(h_won),I(h_play))})
 end
-
--- Pre-allocate 52-card deck once and shuffle in-place
-local function init_deck_pool()
-  if #deck == 52 then return end
-  deck = {}
-  local idx = 1
-  for s = 1, 4 do
-    for r = 1, 13 do
-      deck[idx] = { r = r, s = s }
-      idx = idx + 1
-    end
-  end
 end
-
 local function build_deck()
-  init_deck_pool()
-  for i = 52, 2, -1 do
-    local j = rand_int(1, i)
-    deck[i], deck[j] = deck[j], deck[i]
-  end
-  deck_top = 52
+if#deck~=52 then deck={};local k=1;for s=1,4 do for r=1,13 do deck[k]={r=r,s=s};k=k+1 end end end
+for i=52,2,-1 do local j=rint(1,i);deck[i],deck[j]=deck[j],deck[i]end
+d_top=52
 end
-
-local function draw_card()
-  if deck_top < 1 then build_deck() end
-  local c = deck[deck_top]
-  deck_top = deck_top - 1
-  return c
+local function dcard()if d_top<1 then build_deck()end;local c=deck[d_top];d_top=d_top-1;return c end
+local function pval(r)return r==1 and 14 or r end
+local function eval_hand(hole,comm)
+local all={}
+for i=1,#hole do all[#all+1]=hole[i]end
+if comm then for i=1,#comm do all[#all+1]=comm[i]end end
+if#all==0 then return 0,0,"HIGH CARD"end
+local rc,sc,sb,rb={},{0,0,0,0},{0,0,0,0},0
+for v=2,14 do rc[v]=0 end
+for i=1,#all do
+local v,s=pval(all[i].r),all[i].s
+rc[v],sc[s]=rc[v]+1,sc[s]+1
+local b=1<<v;rb,sb[s]=rb|b,sb[s]|b
+if v==14 then rb,sb[s]=rb|2,sb[s]|2 end
 end
-
--- Convert internal rank (1=Ace, 2..13=2..K) to poker value (2..14, where 14=Ace)
-local function pval(r)
-  return r == 1 and 14 or r
+local function pk(c,k1,k2,k3,k4,k5)return I(c*1000000+(k1 or 0)*38416+(k2 or 0)*2744+(k3 or 0)*196+(k4 or 0)*14+(k5 or 0))end
+local function tst(m)for hi=14,5,-1 do local k=31<<(hi-4);if(m&k)==k then return hi end end;return 0 end
+local fs=0;for s=1,4 do if sc[s]>=5 then fs=s;break end end
+if fs>0 then local sf=tst(sb[fs]);if sf>0 then local c=(sf==14)and 9 or 8;return pk(c,sf),c,HNAMES[c]end end
+local qd,tr,pr,sg={},{},{},{}
+for v=14,2,-1 do
+local c=rc[v]
+if c==4 then qd[#qd+1]=v elseif c==3 then tr[#tr+1]=v elseif c==2 then pr[#pr+1]=v elseif c==1 then sg[#sg+1]=v end
 end
-
--- Fast O(13) 5-to-7 card Poker Hand Evaluator
--- Returns: score (32-bit safe integer < 10,000,000), category (0..9), short_name
-local function eval_best_hand(hole, comm)
-  local all = {}
-  for i = 1, #hole do all[#all + 1] = hole[i] end
-  if comm then
-    for i = 1, #comm do all[#all + 1] = comm[i] end
-  end
-  local n = #all
-  if n == 0 then return 0, 0, "HIGH CARD" end
-
-  local rcnt = {}
-  local scnt = { 0, 0, 0, 0 }
-  local sbits = { 0, 0, 0, 0 }
-  local rbits = 0
-
-  for v = 2, 14 do rcnt[v] = 0 end
-
-  for i = 1, n do
-    local v = pval(all[i].r)
-    local s = all[i].s
-    rcnt[v] = rcnt[v] + 1
-    scnt[s] = scnt[s] + 1
-    local bit = 1 << v
-    rbits = rbits | bit
-    sbits[s] = sbits[s] | bit
-    if v == 14 then
-      rbits = rbits | 2     -- Ace low bit (value 1) for A-2-3-4-5 wheel
-      sbits[s] = sbits[s] | 2
-    end
-  end
-
-  local function pack(cat, k1, k2, k3, k4, k5)
-    k1 = k1 or 0; k2 = k2 or 0; k3 = k3 or 0; k4 = k4 or 0; k5 = k5 or 0
-    return I(cat * 1000000 + k1 * 38416 + k2 * 2744 + k3 * 196 + k4 * 14 + k5)
-  end
-
-  local function top_straight(mask)
-    for high = 14, 5, -1 do
-      local m = 31 << (high - 4)
-      if (mask & m) == m then
-        return high
-      end
-    end
-    return 0
-  end
-
-  -- 1. Check Flush & Straight Flush
-  local flush_suit = 0
-  for s = 1, 4 do
-    if scnt[s] >= 5 then
-      flush_suit = s
-      break
-    end
-  end
-
-  if flush_suit > 0 then
-    local sf_high = top_straight(sbits[flush_suit])
-    if sf_high > 0 then
-      local cat = (sf_high == 14) and 9 or 8
-      return pack(cat, sf_high, 0, 0, 0, 0), cat, HAND_NAMES[cat]
-    end
-  end
-
-  -- Group ranks by multiplicity
-  local quads, trips, pairs, singles = {}, {}, {}, {}
-  for v = 14, 2, -1 do
-    local c = rcnt[v]
-    if c == 4 then quads[#quads + 1] = v
-    elseif c == 3 then trips[#trips + 1] = v
-    elseif c == 2 then pairs[#pairs + 1] = v
-    elseif c == 1 then singles[#singles + 1] = v
-    end
-  end
-
-  -- 2. Four of a Kind
-  if #quads > 0 then
-    local q = quads[1]
-    local kicker = 0
-    for v = 14, 2, -1 do
-      if v ~= q and rcnt[v] > 0 then kicker = v; break end
-    end
-    return pack(7, q, kicker, 0, 0, 0), 7, HAND_NAMES[7]
-  end
-
-  -- 3. Full House
-  if #trips > 0 and (#trips >= 2 or #pairs >= 1) then
-    local t = trips[1]
-    local p = (#trips >= 2) and trips[2] or pairs[1]
-    return pack(6, t, p, 0, 0, 0), 6, HAND_NAMES[6]
-  end
-
-  -- 4. Flush
-  if flush_suit > 0 then
-    local fc = {}
-    local mask = sbits[flush_suit]
-    for v = 14, 2, -1 do
-      if (mask & (1 << v)) ~= 0 then
-        fc[#fc + 1] = v
-        if #fc == 5 then break end
-      end
-    end
-    return pack(5, fc[1], fc[2], fc[3], fc[4], fc[5]), 5, HAND_NAMES[5]
-  end
-
-  -- 5. Straight
-  local st_high = top_straight(rbits)
-  if st_high > 0 then
-    return pack(4, st_high, 0, 0, 0, 0), 4, HAND_NAMES[4]
-  end
-
-  -- 6. Three of a Kind
-  if #trips > 0 then
-    local t = trips[1]
-    local k1, k2 = 0, 0
-    for v = 14, 2, -1 do
-      if v ~= t and rcnt[v] > 0 then
-        if k1 == 0 then k1 = v elseif k2 == 0 then k2 = v; break end
-      end
-    end
-    return pack(3, t, k1, k2, 0, 0), 3, HAND_NAMES[3]
-  end
-
-  -- 7. Two Pair
-  if #pairs >= 2 then
-    local p1, p2 = pairs[1], pairs[2]
-    local k1 = 0
-    for v = 14, 2, -1 do
-      if v ~= p1 and v ~= p2 and rcnt[v] > 0 then k1 = v; break end
-    end
-    return pack(2, p1, p2, k1, 0, 0), 2, HAND_NAMES[2]
-  end
-
-  -- 8. One Pair
-  if #pairs == 1 then
-    local p1 = pairs[1]
-    return pack(1, p1, singles[1], singles[2], singles[3], 0), 1, HAND_NAMES[1]
-  end
-
-  -- 9. High Card
-  return pack(0, singles[1], singles[2], singles[3], singles[4], singles[5]), 0, HAND_NAMES[0]
+if#qd>0 then
+local q,k=qd[1],0;for v=14,2,-1 do if v~=q and rc[v]>0 then k=v;break end end
+return pk(7,q,k),7,HNAMES[7]
 end
-
--- Forward declarations
-local rebuild_buttons
-local draw_screen
-local advance_turn
-local next_street_or_showdown
-local resolve_hand
-
--- Count players still in the hand (not folded) and players able to act (not folded and not all-in)
-local function count_players()
-  local active, can_act = 0, 0
-  for i = 1, 4 do
-    if not seats[i].folded then
-      active = active + 1
-      if not seats[i].all_in and seats[i].stack > 0 then
-        can_act = can_act + 1
-      end
-    end
-  end
-  return active, can_act
+if#tr>0 and(#tr>=2 or#pr>=1)then return pk(6,tr[1],(#tr>=2)and tr[2]or pr[1]),6,HNAMES[6]end
+if fs>0 then
+local fc,m={},sb[fs]
+for v=14,2,-1 do if(m&(1<<v))~=0 then fc[#fc+1]=v;if#fc==5 then break end end end
+return pk(5,fc[1],fc[2],fc[3],fc[4],fc[5]),5,HNAMES[5]
 end
-
--- Post chips from seat idx into pot
-local function post_chips(idx, amount)
-  local p = seats[idx]
-  local actual = I(math.min(amount, p.stack))
-  p.stack = I(p.stack - actual)
-  p.street_bet = I(p.street_bet + actual)
-  p.total_bet = I(p.total_bet + actual)
-  pot = I(pot + actual)
-  if p.stack <= 0 then
-    p.stack = 0
-    p.all_in = true
-  end
-  return actual
+local st=tst(rb);if st>0 then return pk(4,st),4,HNAMES[4]end
+if#tr>0 then
+local t,k1,k2=tr[1],0,0
+for v=14,2,-1 do if v~=t and rc[v]>0 then if k1==0 then k1=v elseif k2==0 then k2=v;break end end end
+return pk(3,t,k1,k2),3,HNAMES[3]
 end
-
--- Sync player's raise_to slider bounds
-local function sync_raise_bounds()
-  local _, bb = get_blinds()
-  local p = seats[1]
-  local max_total = I(p.street_bet + p.stack)
-  local min_total = I(cur_bet + math.max(bb, min_raise))
-  if cur_bet == 0 then
-    min_total = bb
-  end
-  if min_total > max_total then
-    min_total = max_total
-  end
-  raise_to = I(clamp(raise_to, min_total, max_total))
+if#pr>=2 then
+local p1,p2,k1=pr[1],pr[2],0;for v=14,2,-1 do if v~=p1 and v~=p2 and rc[v]>0 then k1=v;break end end
+return pk(2,p1,p2,k1),2,HNAMES[2]
 end
-
--- Execute an action for seat idx: "fold" | "call" | "raise" | "allin"
-local function perform_action(idx, kind, target_bet)
-  local p = seats[idx]
-  local _, bb = get_blinds()
-  p.acted = true
-
-  if kind == "fold" then
-    p.folded = true
-    p.status = "FOLD"
-    sfx()
-  elseif kind == "call" then
-    local need = I(cur_bet - p.street_bet)
-    if need <= 0 then
-      p.status = "CHECK"
-    else
-      post_chips(idx, need)
-      p.status = p.all_in and "ALL-IN" or string.format("CALL $%d", I(p.street_bet))
-    end
-    sfx()
-  elseif kind == "raise" or kind == "allin" then
-    local max_tot = I(p.street_bet + p.stack)
-    local des_tot = (kind == "allin") and max_tot or I(clamp(target_bet or raise_to, cur_bet + bb, max_tot))
-    local added = I(des_tot - p.street_bet)
-    if added > 0 then
-      post_chips(idx, added)
-    end
-    if p.street_bet > cur_bet then
-      local diff = I(p.street_bet - cur_bet)
-      if diff > min_raise then min_raise = diff end
-      cur_bet = p.street_bet
-      last_aggressor = idx
-      for i = 1, 4 do
-        if i ~= idx and not seats[i].folded and not seats[i].all_in then
-          seats[i].acted = false
-        end
-      end
-    end
-    if p.all_in then
-      p.status = string.format("ALL-IN $%d", I(p.street_bet))
-    elseif cur_bet == added then
-      p.status = string.format("BET $%d", I(p.street_bet))
-    else
-      p.status = string.format("RAISE $%d", I(p.street_bet))
-    end
-    sfx()
-  end
-
-  local active = count_players()
-  if active <= 1 then
-    resolve_hand(true)
-    return
-  end
-
-  advance_turn()
+if#pr==1 then return pk(1,pr[1],sg[1],sg[2],sg[3]),1,HNAMES[1]end
+return pk(0,sg[1],sg[2],sg[3],sg[4],sg[5]),0,HNAMES[0]
 end
-
--- Decide AI action for seat idx
-local function ai_decide(idx)
-  local p = seats[idx]
-  local _, bb = get_blinds()
-  local to_call = I(cur_bet - p.street_bet)
-  local score, cat = eval_best_hand(p.cards, board)
-
-  local strength = 25
-  if street == 0 then
-    local v1, v2 = pval(p.cards[1].r), pval(p.cards[2].r)
-    local hi, lo = math.max(v1, v2), math.min(v1, v2)
-    local suited = (p.cards[1].s == p.cards[2].s)
-    if v1 == v2 then
-      strength = 52 + hi * 3
-    else
-      strength = (hi * 2) + lo + (suited and 8 or 0) + ((hi - lo == 1) and 5 or 0)
-    end
-  else
-    strength = 18 + cat * 18 + I((score % 1000000) / 38416)
-  end
-
-  local roll = rand_int(1, 100)
-  if p.style == "loose" then
-    strength = strength + 10
-  elseif p.style == "lag" then
-    strength = strength + (roll > 65 and 18 or 4)
-  elseif p.style == "tag" then
-    strength = strength + (street > 0 and cat >= 1 and 8 or -3)
-  end
-
-  if to_call <= 0 then
-    if strength >= 58 and p.stack > bb and roll <= 70 then
-      local bet_sz = I(math.min(p.street_bet + p.stack, math.max(bb, I(pot * 0.5))))
-      perform_action(idx, "raise", bet_sz)
-    else
-      perform_action(idx, "call")
-    end
-  else
-    local pot_odds_penalty = I((to_call * 45) / math.max(bb, pot))
-    local eff = strength - pot_odds_penalty
-    if to_call >= p.stack then
-      if strength >= 52 or (to_call <= bb * 2 and strength >= 36) then
-        perform_action(idx, "allin")
-      else
-        perform_action(idx, "fold")
-      end
-    elseif eff >= 54 and p.stack > to_call + bb * 2 and roll <= 55 then
-      local r_tot = I(cur_bet + math.max(min_raise, bb * 2))
-      perform_action(idx, "raise", r_tot)
-    elseif eff >= 24 or to_call <= bb then
-      perform_action(idx, "call")
-    else
-      perform_action(idx, "fold")
-    end
-  end
+local rebuild_btns,draw_screen,adv_turn,next_street,resolve
+local function cnt_pl()
+local a,c=0,0
+for i=1,4 do if not seats[i].fold then a=a+1;if not seats[i].all and seats[i].stack>0 then c=c+1 end end end
+return a,c
 end
-
--- Find next player to act on current street, or move to next street
-advance_turn = function()
-  local active, can_act = count_players()
-  if active <= 1 then
-    resolve_hand(true)
-    return
-  end
-
-  for step = 1, 4 do
-    local nxt = ((turn_seat + step - 1) % 4) + 1
-    local p = seats[nxt]
-    if not p.folded and not p.all_in and p.stack > 0 then
-      if not p.acted or p.street_bet < cur_bet then
-        if can_act == 1 and p.street_bet >= cur_bet then
-          break
-        end
-        turn_seat = nxt
-        if p.is_human then
-          timer.stop()
-          state = "player"
-          sync_raise_bounds()
-          rebuild_buttons()
-          draw_screen()
-        else
-          state = "ai"
-          rebuild_buttons()
-          draw_screen()
-          timer.every(420)
-        end
-        return
-      end
-    end
-  end
-
-  next_street_or_showdown()
+local function post(i,amt)
+local p=seats[i];local a=I(min(amt,p.stack))
+p.stack,p.sb,p.tb,pot=I(p.stack-a),I(p.sb+a),I(p.tb+a),I(pot+a)
+if p.stack<=0 then p.stack,p.all=0,true end
+return a
 end
-
--- Deal next community street or proceed to showdown
-next_street_or_showdown = function()
-  timer.stop()
-  for i = 1, 4 do
-    seats[i].street_bet = 0
-    seats[i].acted = false
-    if not seats[i].folded and not seats[i].all_in then
-      seats[i].status = ""
-    end
-  end
-  cur_bet = 0
-  local _, bb = get_blinds()
-  min_raise = bb
-
-  if street == 0 then
-    street = 1
-    board[1] = draw_card()
-    board[2] = draw_card()
-    board[3] = draw_card()
-  elseif street == 1 then
-    street = 2
-    board[4] = draw_card()
-  elseif street == 2 then
-    street = 3
-    board[5] = draw_card()
-  else
-    resolve_hand(false)
-    return
-  end
-
-  sfx()
-  local _, can_act = count_players()
-  if can_act < 2 then
-    show_all_cards = true
-    state = "ai"
-    rebuild_buttons()
-    draw_screen()
-    timer.every(520)
-    return
-  end
-
-  turn_seat = dealer_seat
-  advance_turn()
+local function sync_r()
+local _,bb=blinds()
+local mt=I(seats[1].sb+seats[1].stack)
+local mn=(c_bet==0)and bb or I(c_bet+max(bb,min_r))
+r_to=I(clp(r_to,min(mn,mt),mt))
 end
-
--- Settle pot (with full side-pot & split-pot support)
-resolve_hand = function(by_fold)
-  timer.stop()
-  state = "done"
-  street = 4
-
-  if by_fold then
-    local winner = 1
-    for i = 1, 4 do
-      if not seats[i].folded then winner = i; break end
-    end
-    seats[winner].stack = I(seats[winner].stack + pot)
-    seats[winner].status = "WIN!"
-    hands_played = hands_played + 1
-    if winner == 1 then
-      hands_won = hands_won + 1
-      banner_title = "YOU WIN POT!"
-      banner_sub = string.format("+$%d (Opponents Folded)", I(pot))
-      banner_col = C.good
-    else
-      banner_title = seats[winner].name .. " WINS"
-      banner_sub = string.format("Pot $%d (Folded)", I(pot))
-      banner_col = C.accent
-    end
-    pot = 0
-    save_stats()
-    rebuild_buttons()
-    draw_screen()
-    return
-  end
-
-  show_all_cards = true
-  local scores = {}
-  local hnames = {}
-  for i = 1, 4 do
-    if not seats[i].folded then
-      local sc, _, nm = eval_best_hand(seats[i].cards, board)
-      scores[i] = sc
-      hnames[i] = nm
-      seats[i].status = nm
-    else
-      scores[i] = -1
-    end
-  end
-
-  local rem = { seats[1].total_bet, seats[2].total_bet, seats[3].total_bet, seats[4].total_bet }
-  local won_amt = { 0, 0, 0, 0 }
-  local best_overall_winner = 1
-  local best_overall_score = -1
-
-  for i = 1, 4 do
-    if scores[i] > best_overall_score then
-      best_overall_score = scores[i]
-      best_overall_winner = i
-    end
-  end
-
-  while true do
-    local min_lvl = 999999
-    for i = 1, 4 do
-      if not seats[i].folded and rem[i] > 0 and rem[i] < min_lvl then
-        min_lvl = rem[i]
-      end
-    end
-    if min_lvl == 999999 then break end
-
-    local slice_pot = 0
-    local elig = {}
-    for i = 1, 4 do
-      local take = math.min(rem[i], min_lvl)
-      if take > 0 then
-        rem[i] = rem[i] - take
-        slice_pot = slice_pot + take
-      end
-      if not seats[i].folded and take == min_lvl then
-        elig[#elig + 1] = i
-      end
-    end
-
-    if slice_pot > 0 and #elig > 0 then
-      local max_sc = -1
-      for _, idx in ipairs(elig) do
-        if scores[idx] > max_sc then max_sc = scores[idx] end
-      end
-      local winners = {}
-      for _, idx in ipairs(elig) do
-        if scores[idx] == max_sc then winners[#winners + 1] = idx end
-      end
-      local share = I(slice_pot / #winners)
-      local odd = I(slice_pot - share * #winners)
-      for w_i, idx in ipairs(winners) do
-        local award = share + (w_i == 1 and odd or 0)
-        seats[idx].stack = I(seats[idx].stack + award)
-        won_amt[idx] = I(won_amt[idx] + award)
-      end
-    end
-
-    local any_nonfold_rem = false
-    for i = 1, 4 do
-      if not seats[i].folded and rem[i] > 0 then any_nonfold_rem = true end
-    end
-    if not any_nonfold_rem then
-      for i = 1, 4 do
-        if rem[i] > 0 then
-          seats[i].stack = I(seats[i].stack + rem[i])
-          rem[i] = 0
-        end
-      end
-      break
-    end
-  end
-
-  hands_played = hands_played + 1
-  if won_amt[1] > 0 then
-    hands_won = hands_won + 1
-    banner_title = string.format("YOU WIN $%d!", I(won_amt[1]))
-    banner_sub = hnames[1] or "BEST HAND"
-    banner_col = COL_GOLD
-  else
-    local w = best_overall_winner
-    banner_title = string.format("%s WINS $%d", seats[w].name, I(won_amt[w]))
-    banner_sub = hnames[w] or "SHOWDOWN"
-    banner_col = seats[1].folded and C.accent or C.bad
-  end
-
-  pot = 0
-  save_stats()
-  sfx()
-  rebuild_buttons()
-  draw_screen()
+local function act_pl(idx,kind,tgt)
+local p=seats[idx];local _,bb=blinds();p.act=true
+if kind=="fold"then p.fold,p.st=true,"FOLD";sfx()
+elseif kind=="call"then
+local nd=I(c_bet-p.sb)
+if nd<=0 then p.st="CHECK"else post(idx,nd);p.st=p.all and"ALL-IN"or fmt("CALL $%d",I(p.sb))end;sfx()
+else
+local mt=I(p.sb+p.stack)
+local ds=(kind=="allin")and mt or I(clp(tgt or r_to,c_bet+bb,mt))
+local ad=I(ds-p.sb);if ad>0 then post(idx,ad)end
+if p.sb>c_bet then
+local df=I(p.sb-c_bet);if df>min_r then min_r=df end;c_bet=p.sb
+for i=1,4 do if i~=idx and not seats[i].fold and not seats[i].all then seats[i].act=false end end
 end
-
--- Start a new hand
+p.st=p.all and fmt("ALL-IN $%d",I(p.sb))or((c_bet==ad)and fmt("BET $%d",I(p.sb))or fmt("RAISE $%d",I(p.sb)));sfx()
+end
+if cnt_pl()<=1 then resolve(true);return end
+adv_turn()
+end
+local function ai_go(idx)
+local p=seats[idx];local _,bb=blinds();local tc=I(c_bet-p.sb)
+local sc,cat=eval_hand(p.cards,board);local str=25
+if street==0 then
+local v1,v2=pval(p.cards[1].r),pval(p.cards[2].r);local hi,lo=max(v1,v2),min(v1,v2)
+str=(v1==v2)and(52+hi*3)or((hi*2)+lo+((p.cards[1].s==p.cards[2].s)and 8 or 0)+((hi-lo==1)and 5 or 0))
+else str=18+cat*18+I((sc%1000000)/38416)end
+local rl=rint(1,100)
+if p.sty=="l"then str=str+10 elseif p.sty=="g"then str=str+(rl>65 and 18 or 4)elseif p.sty=="t"then str=str+(street>0 and cat>=1 and 8 or-3)end
+if tc<=0 then
+if str>=58 and p.stack>bb and rl<=70 then act_pl(idx,"raise",I(min(p.sb+p.stack,max(bb,I(pot*0.5)))))else act_pl(idx,"call")end
+else
+local ef=str-I((tc*45)/max(bb,pot))
+if tc>=p.stack then act_pl(idx,(str>=52 or(tc<=bb*2 and str>=36))and"allin"or"fold")
+elseif ef>=54 and p.stack>tc+bb*2 and rl<=55 then act_pl(idx,"raise",I(c_bet+max(min_r,bb*2)))
+elseif ef>=24 or tc<=bb then act_pl(idx,"call")else act_pl(idx,"fold")end
+end
+end
+adv_turn=function()
+local act,can=cnt_pl();if act<=1 then resolve(true);return end
+for stp=1,4 do
+local nxt=((trn_s+stp-1)%4)+1;local p=seats[nxt]
+if not p.fold and not p.all and p.stack>0 and(not p.act or p.sb<c_bet)then
+if can==1 and p.sb>=c_bet then break end
+trn_s=nxt
+if p.hum then timer.stop();state="player";sync_r();rebuild_btns();draw_screen()
+else state="ai";rebuild_btns();draw_screen();timer.every(420)end
+return
+end
+end
+next_street()
+end
+next_street=function()
+timer.stop()
+for i=1,4 do seats[i].sb,seats[i].act=0,false;if not seats[i].fold and not seats[i].all then seats[i].st=""end end
+local _,bb=blinds();c_bet,min_r=0,bb
+if street==0 then street=1;board[1],board[2],board[3]=dcard(),dcard(),dcard()
+elseif street==1 then street=2;board[4]=dcard()
+elseif street==2 then street=3;board[5]=dcard()
+else resolve(false);return end
+sfx();local _,can=cnt_pl()
+if can<2 then show_all,state=true,"ai";rebuild_btns();draw_screen();timer.every(520);return end
+trn_s=dlr_s;adv_turn()
+end
+resolve=function(by_fold)
+timer.stop();state,street="done",4
+if by_fold then
+local w=1;for i=1,4 do if not seats[i].fold then w=i;break end end
+seats[w].stack,seats[w].st,h_play=I(seats[w].stack+pot),"WIN!",h_play+1
+if w==1 then h_won=h_won+1;b_tit,b_sub,b_col="YOU WIN POT!",fmt("+$%d (Opponents Folded)",I(pot)),C.good
+else b_tit,b_sub,b_col=seats[w].name.." WINS",fmt("Pot $%d (Folded)",I(pot)),C.accent end
+pot=0;save_stats();rebuild_btns();draw_screen();return
+end
+show_all=true;local scs,hns,bw,bs={},{},1,-1
+for i=1,4 do
+if not seats[i].fold then
+local sc,_,nm=eval_hand(seats[i].cards,board)
+scs[i],hns[i],seats[i].st=sc,nm,nm;if sc>bs then bs,bw=sc,i end
+else scs[i]=-1 end
+end
+local rem,won={seats[1].tb,seats[2].tb,seats[3].tb,seats[4].tb},{0,0,0,0}
+while true do
+local ml=999999
+for i=1,4 do if not seats[i].fold and rem[i]>0 and rem[i]<ml then ml=rem[i]end end
+if ml==999999 then break end
+local sp,el=0,{}
+for i=1,4 do
+local tk=min(rem[i],ml);if tk>0 then rem[i],sp=rem[i]-tk,sp+tk end
+if not seats[i].fold and tk==ml then el[#el+1]=i end
+end
+if sp>0 and#el>0 then
+local ms,ws=-1,{}
+for _,idx in ipairs(el)do if scs[idx]>ms then ms=scs[idx]end end
+for _,idx in ipairs(el)do if scs[idx]==ms then ws[#ws+1]=idx end end
+local sh=I(sp/#ws);local od=I(sp-sh*#ws)
+for wi,idx in ipairs(ws)do local aw=sh+(wi==1 and od or 0);seats[idx].stack,won[idx]=I(seats[idx].stack+aw),I(won[idx]+aw)end
+end
+local any=false;for i=1,4 do if not seats[i].fold and rem[i]>0 then any=true end end
+if not any then for i=1,4 do if rem[i]>0 then seats[i].stack,rem[i]=I(seats[i].stack+rem[i]),0 end end;break end
+end
+h_play=h_play+1
+if won[1]>0 then h_won=h_won+1;b_tit,b_sub,b_col=fmt("YOU WIN $%d!",I(won[1])),hns[1]or"BEST HAND",K_GLD
+else b_tit,b_sub,b_col=fmt("%s WINS $%d",seats[bw].name,I(won[bw])),hns[bw]or"SHOWDOWN",seats[1].fold and C.accent or C.bad end
+pot=0;save_stats();sfx();rebuild_btns();draw_screen()
+end
 local function start_hand()
-  local sb, bb = get_blinds()
-
-  if seats[1].stack < bb then
-    seats[1].stack = START_STACK
-    sys.toast("Free $500 bailout buy-in!")
-  end
-  for i = 2, 4 do
-    if seats[i].stack < bb then
-      seats[i].stack = START_STACK
-      sys.toast(seats[i].name .. " re-bought $500")
-    end
-  end
-
-  build_deck()
-  board = {}
-  pot = 0
-  street = 0
-  show_all_cards = false
-  banner_title = ""
-  banner_sub = ""
-
-  dealer_seat = (dealer_seat % 4) + 1
-  local sb_seat = (dealer_seat % 4) + 1
-  local bb_seat = (sb_seat % 4) + 1
-
-  for i = 1, 4 do
-    local p = seats[i]
-    p.cards = { draw_card(), draw_card() }
-    p.street_bet = 0
-    p.total_bet = 0
-    p.folded = false
-    p.all_in = false
-    p.acted = false
-    p.status = ""
-    if i == dealer_seat then p.role = "D"
-    elseif i == sb_seat then p.role = "SB"
-    elseif i == bb_seat then p.role = "BB"
-    else p.role = "" end
-  end
-
-  post_chips(sb_seat, sb)
-  seats[sb_seat].status = string.format("SB $%d", I(seats[sb_seat].street_bet))
-
-  post_chips(bb_seat, bb)
-  seats[bb_seat].status = string.format("BB $%d", I(seats[bb_seat].street_bet))
-
-  cur_bet = bb
-  min_raise = bb
-  raise_to = bb * 2
-  last_aggressor = bb_seat
-
-  sfx()
-  turn_seat = bb_seat
-  advance_turn()
+local sb,bb=blinds()
+if seats[1].stack<bb then seats[1].stack=S0;sys.toast("Free $500 bailout buy-in!")end
+for i=2,4 do if seats[i].stack<bb then seats[i].stack=S0;sys.toast(seats[i].name.." re-bought $500")end end
+build_deck();board,pot,street,show_all,b_tit,b_sub={},0,0,false,"",""
+dlr_s=(dlr_s%4)+1;local sb_s=(dlr_s%4)+1;local bb_s=(sb_s%4)+1
+for i=1,4 do
+local p=seats[i]
+p.cards,p.sb,p.tb,p.fold,p.all,p.act,p.st={dcard(),dcard()},0,0,false,false,false,""
+p.role=(i==dlr_s)and"D"or((i==sb_s)and"SB"or((i==bb_s)and"BB"or""))
 end
-
-local function adjust_raise(delta)
-  if state ~= "player" then return end
-  raise_to = I(raise_to + delta)
-  sync_raise_bounds()
-  sfx()
-  rebuild_buttons()
-  draw_screen()
+post(sb_s,sb);seats[sb_s].st=fmt("SB $%d",I(seats[sb_s].sb))
+post(bb_s,bb);seats[bb_s].st=fmt("BB $%d",I(seats[bb_s].sb))
+c_bet,min_r,r_to,trn_s=bb,bb,bb*2,bb_s;sfx();adv_turn()
 end
-
-local function cycle_blinds()
-  blind_idx = (blind_idx % #BLIND_LEVELS) + 1
-  local sb, bb = get_blinds()
-  sys.toast(string.format("Blinds: $%d / $%d", sb, bb))
-  sfx()
-  save_stats()
-  rebuild_buttons()
-  draw_screen()
+local function adj_r(d)if state=="player"then r_to=I(r_to+d);sync_r();sfx();rebuild_btns();draw_screen()end end
+local function cyc_bl()b_idx=(b_idx%#BLINDS)+1;local sb,bb=blinds();sys.toast(fmt("Blinds: $%d / $%d",sb,bb));sfx();save_stats();rebuild_btns();draw_screen()end
+local function rst_tbl()for i=1,4 do seats[i].stack=S0 end;sys.toast("New $500 Table");sfx();start_hand()end
+rebuild_btns=function()
+btns={};local sb,bb=blinds();local cmp=(W<280)
+if state=="title"then
+btns={
+{label=fmt("BLINDS $%d/$%d",sb,bb),w=96,enabled=true,fn=cyc_bl},
+{label="RESET $500",w=84,enabled=true,fn=rst_tbl},
+{label=cmp and"DEAL"or"DEAL HOLD'EM [D]",w=122,primary=true,enabled=true,fn=start_hand},
+};f_idx=3
+elseif state=="player"then
+local p=seats[1];local tc=I(max(0,c_bet-p.sb));local cr=(p.stack>tc);sync_r()
+local cl=(tc<=0)and"CHECK"or((tc>=p.stack)and fmt("ALL-IN $%d",I(p.stack))or fmt("CALL $%d",tc))
+local rl=(c_bet==0)and fmt("BET $%d",I(r_to))or fmt("RAISE $%d",I(r_to))
+btns={
+{label="FOLD",w=44,enabled=true,fn=function()act_pl(1,"fold")end},
+{label=cl,w=74,primary=true,enabled=true,fn=function()act_pl(1,"call")end},
+{label=rl,w=96,enabled=cr,fn=function()act_pl(1,"raise",r_to)end},
+{label="+BB",w=36,enabled=cr,fn=function()
+local mt=I(p.sb+p.stack);r_to=(r_to>=mt)and I(c_bet+max(bb,min_r))or I(r_to+bb)
+sync_r();sfx();rebuild_btns();draw_screen()
+end},
+{label="ALL-IN",w=52,enabled=p.stack>0,fn=function()act_pl(1,"allin")end},
+};f_idx=2
+elseif state=="ai"then
+local who=seats[trn_s]and seats[trn_s].name or"DEALER"
+btns={{label=who.." ACTING... (TAP TO SKIP)",w=300,enabled=true,fn=function()if state=="ai"then app.on_tick(0)end end}};f_idx=1
+elseif state=="done"then
+btns={
+{label=fmt("$%d/$%d [B]",sb,bb),w=88,enabled=true,fn=cyc_bl},
+{label=cmp and"RESET"or"NEW TBL [N]",w=94,enabled=true,fn=rst_tbl},
+{label=cmp and"DEAL [D]"or"NEXT HAND [D]",w=120,primary=true,enabled=true,fn=start_hand},
+};f_idx=3
 end
-
-local function reset_table()
-  for i = 1, 4 do
-    seats[i].stack = START_STACK
-  end
-  sys.toast("New $500 Table")
-  sfx()
-  start_hand()
 end
-
--- Build bottom bar buttons for current state
-rebuild_buttons = function()
-  active_btns = {}
-  local sb, bb = get_blinds()
-  local compact_btns = (W < 280)
-
-  if state == "title" then
-    active_btns = {
-      { label = string.format("BLINDS $%d/$%d", sb, bb), key = "b", weight = 96, enabled = true, fn = cycle_blinds },
-      { label = "RESET $500", key = "n", weight = 84, enabled = true, fn = reset_table },
-      { label = compact_btns and "DEAL" or "DEAL HOLD'EM [D]", key = "d", weight = 122, primary = true, enabled = true, fn = start_hand },
-    }
-    focus_idx = 3
-  elseif state == "player" then
-    local p = seats[1]
-    local to_call = I(math.max(0, cur_bet - p.street_bet))
-    local can_raise = (p.stack > to_call)
-    sync_raise_bounds()
-
-    local call_lbl
-    if to_call <= 0 then
-      call_lbl = "CHECK"
-    elseif to_call >= p.stack then
-      call_lbl = string.format("ALL-IN $%d", I(p.stack))
-    else
-      call_lbl = string.format("CALL $%d", to_call)
-    end
-
-    local raise_lbl = (cur_bet == 0)
-      and string.format("BET $%d", I(raise_to))
-      or string.format("RAISE $%d", I(raise_to))
-
-    active_btns = {
-      { label = "FOLD",    key = "f", weight = 44, enabled = true, fn = function() perform_action(1, "fold") end },
-      { label = call_lbl,  key = "c", weight = 74, primary = true, enabled = true, fn = function() perform_action(1, "call") end },
-      { label = raise_lbl, key = "r", weight = 96, enabled = can_raise, fn = function() perform_action(1, "raise", raise_to) end },
-      { label = "+BB",     key = "+", weight = 36, enabled = can_raise, fn = function()
-          local max_t = I(p.street_bet + p.stack)
-          if raise_to >= max_t then
-            raise_to = I(cur_bet + math.max(bb, min_raise))
-          else
-            raise_to = I(raise_to + bb)
-          end
-          sync_raise_bounds()
-          sfx()
-          rebuild_buttons()
-          draw_screen()
-        end },
-      { label = "ALL-IN",  key = "a", weight = 52, enabled = p.stack > 0, fn = function() perform_action(1, "allin") end },
-    }
-    focus_idx = 2
-  elseif state == "ai" then
-    local who = seats[turn_seat] and seats[turn_seat].name or "DEALER"
-    active_btns = {
-      { label = who .. " ACTING... (TAP TO SKIP)", key = " ", weight = 300, enabled = true, fn = function()
-          if state == "ai" then app.on_tick(0) end
-        end }
-    }
-    focus_idx = 1
-  elseif state == "done" then
-    active_btns = {
-      { label = string.format("$%d/$%d [B]", sb, bb), key = "b", weight = 88, enabled = true, fn = cycle_blinds },
-      { label = compact_btns and "RESET" or "NEW TBL [N]", key = "n", weight = 94, enabled = true, fn = reset_table },
-      { label = compact_btns and "DEAL [D]" or "NEXT HAND [D]", key = "d", weight = 120, primary = true, enabled = true, fn = start_hand },
-    }
-    focus_idx = 3
-  end
+local function disk(tc,cx,cy,r,c)
+r=max(1,I(r));local k=max(1,I(r*0.68))
+tc:rect(cx-k,cy-r,k*2+1,r*2+1,c,true);tc:rect(cx-r,cy-k,r*2+1,k*2+1,c,true)
 end
-
--- Helper: draw a filled octagonal disk in O(1) using two overlapping rects (avoids LVGL lv_canvas_draw_arc 0..360 bug)
-local function fill_disk(tc, cx, cy, rad, col)
-  rad = math.max(1, I(rad))
-  local c = math.max(1, I(rad * 0.68))
-  tc:rect(cx - c, cy - rad, c * 2 + 1, rad * 2 + 1, col, true)
-  tc:rect(cx - rad, cy - c, rad * 2 + 1, c * 2 + 1, col, true)
+local P2={
+{0,-2,1,1,-1,-1,3,1,-2,0,5,2,0,2,1,2},{-2,-2,2,1,1,-2,2,1,-2,-1,5,2,-1,1,3,1,0,2,1,1},
+{0,-2,1,1,-1,-1,3,1,-2,0,5,1,-1,1,3,1,0,2,1,1},{-1,-2,3,1,0,-1,1,1,-2,0,5,2,0,2,1,2},
+}
+local P4={
+{0,-3,1,1,-1,-2,3,1,-2,-1,5,1,-3,0,7,2,0,2,1,1,-1,3,3,1},
+{-2,-3,2,1,1,-3,2,1,-3,-2,3,1,1,-2,3,1,-3,-1,7,2,-2,1,5,1,-1,2,3,1,0,3,1,1},
+{0,-3,1,1,-1,-2,3,1,-2,-1,5,1,-3,0,7,1,-2,1,5,1,-1,2,3,1,0,3,1,1},
+{-1,-3,3,2,-3,-1,2,2,2,-1,2,2,-1,-1,3,2,0,1,1,2,-1,3,3,1},
+}
+local P5={
+{0,-5,1,1,-1,-4,3,1,-2,-3,5,1,-3,-2,7,1,-4,-1,9,1,-5,0,11,2,-4,2,3,1,0,2,1,1,2,2,3,1,-1,3,3,1,-2,4,5,1,-3,5,7,1},
+{-3,-5,2,1,2,-5,2,1,-4,-4,4,1,1,-4,4,1,-5,-3,11,3,-4,0,9,1,-3,1,7,1,-2,2,5,1,-1,3,3,1,0,4,1,2},
+{0,-5,1,1,-1,-4,3,1,-2,-3,5,2,-3,-1,7,1,-4,0,9,1,-3,1,7,1,-2,2,5,2,-1,4,3,1,0,5,1,1},
+{-1,-5,3,1,-2,-4,5,2,-1,-2,3,1,-4,-1,3,1,0,-1,1,1,2,-1,3,1,-5,0,11,2,-4,2,3,1,0,2,1,1,2,2,3,1,-1,3,3,2,-3,5,7,1},
+}
+local function pip(x,y,s,r)
+x,y,r=I(x),I(y),max(2,I(r))
+local c=(s==2 or s==3)and K_RED or K_BLK
+local tc,ox,oy,ts=cv,0,0,cv.tiles
+if ts then
+local x1,y1,x2,y2=x-r-2,y-r-2,x+r+2,y+r+4
+for i=1,#ts do local t=ts[i];if x1>=t.x and x2<=t.x2 and y1>=t.y and y2<=t.y2 then tc,ox,oy=t.c,t.x,t.y;break end end
 end
-
--- Scalable solid-rect vector suit pip renderer (100% rect-based, zero circle calls)
-local function draw_suit_pip(x, y, suit, r)
-  x, y, r = I(x), I(y), math.max(2, I(r))
-  local col = (suit == 2 or suit == 3) and COL_RED or COL_BLACK
-  local step = r >= 6 and 2 or 1
-
-  -- Fast path: if using a tiled virtual canvas and this pip lies wholly within one tile,
-  -- issue draw calls directly to that tile's native canvas with local coordinates.
-  local tc = cv
-  local ox, oy = 0, 0
-  local tiles = cv.tiles
-  if tiles then
-    local x1, y1, x2, y2 = x - r - 2, y - r - 2, x + r + 2, y + r + 4
-    for i = 1, #tiles do
-      local t = tiles[i]
-      if x1 >= t.x and x2 <= t.x2 and y1 >= t.y and y2 <= t.y2 then
-        tc = t.c
-        ox = t.x
-        oy = t.y
-        break
-      end
-    end
-  end
-  local px, py = x - ox, y - oy
-
-  if r <= 2 then
-    -- Ultra-compact 5x5 mini pip (for small T-Deck AI showdown cards)
-    if suit == 1 then -- Spade
-      tc:rect(px, py - 2, 1, 1, col, true)
-      tc:rect(px - 1, py - 1, 3, 1, col, true)
-      tc:rect(px - 2, py, 5, 2, col, true)
-      tc:rect(px, py + 2, 1, 2, col, true)
-    elseif suit == 2 then -- Heart
-      tc:rect(px - 2, py - 2, 2, 1, col, true)
-      tc:rect(px + 1, py - 2, 2, 1, col, true)
-      tc:rect(px - 2, py - 1, 5, 2, col, true)
-      tc:rect(px - 1, py + 1, 3, 1, col, true)
-      tc:rect(px, py + 2, 1, 1, col, true)
-    elseif suit == 3 then -- Diamond
-      tc:rect(px, py - 2, 1, 1, col, true)
-      tc:rect(px - 1, py - 1, 3, 1, col, true)
-      tc:rect(px - 2, py, 5, 1, col, true)
-      tc:rect(px - 1, py + 1, 3, 1, col, true)
-      tc:rect(px, py + 2, 1, 1, col, true)
-    else -- Club
-      tc:rect(px - 1, py - 2, 3, 1, col, true)
-      tc:rect(px, py - 1, 1, 1, col, true)
-      tc:rect(px - 2, py, 5, 2, col, true)
-      tc:rect(px, py + 2, 1, 2, col, true)
-    end
-    return
-  end
-
-  if r <= 4 then
-    -- Hand-crafted 7x7 corner suit pip (T-Deck & compact screens)
-    if suit == 1 then -- Spade
-      tc:rect(px, py - 3, 1, 1, col, true)
-      tc:rect(px - 1, py - 2, 3, 1, col, true)
-      tc:rect(px - 2, py - 1, 5, 1, col, true)
-      tc:rect(px - 3, py, 7, 2, col, true)
-      tc:rect(px, py + 2, 1, 1, col, true)
-      tc:rect(px - 1, py + 3, 3, 1, col, true)
-    elseif suit == 2 then -- Heart (deep top cleft)
-      tc:rect(px - 2, py - 3, 2, 1, col, true)
-      tc:rect(px + 1, py - 3, 2, 1, col, true)
-      tc:rect(px - 3, py - 2, 3, 1, col, true)
-      tc:rect(px + 1, py - 2, 3, 1, col, true)
-      tc:rect(px - 3, py - 1, 7, 2, col, true)
-      tc:rect(px - 2, py + 1, 5, 1, col, true)
-      tc:rect(px - 1, py + 2, 3, 1, col, true)
-      tc:rect(px, py + 3, 1, 1, col, true)
-    elseif suit == 3 then -- Diamond (narrow rhombus)
-      tc:rect(px, py - 3, 1, 1, col, true)
-      tc:rect(px - 1, py - 2, 3, 1, col, true)
-      tc:rect(px - 2, py - 1, 5, 1, col, true)
-      tc:rect(px - 3, py, 7, 1, col, true)
-      tc:rect(px - 2, py + 1, 5, 1, col, true)
-      tc:rect(px - 1, py + 2, 3, 1, col, true)
-      tc:rect(px, py + 3, 1, 1, col, true)
-    else -- Club (3 distinct clover lobes + stem)
-      tc:rect(px - 1, py - 3, 3, 2, col, true)
-      tc:rect(px - 3, py - 1, 2, 2, col, true)
-      tc:rect(px + 2, py - 1, 2, 2, col, true)
-      tc:rect(px - 1, py - 1, 3, 2, col, true)
-      tc:rect(px, py + 1, 1, 2, col, true)
-      tc:rect(px - 1, py + 3, 3, 1, col, true)
-    end
-    return
-  end
-
-  if r == 5 then
-    -- Hand-crafted 11x11 center card pip (T-Deck, Heltec V4, Pager)
-    if suit == 1 then -- Spade
-      tc:rect(px, py - 5, 1, 1, col, true)
-      tc:rect(px - 1, py - 4, 3, 1, col, true)
-      tc:rect(px - 2, py - 3, 5, 1, col, true)
-      tc:rect(px - 3, py - 2, 7, 1, col, true)
-      tc:rect(px - 4, py - 1, 9, 1, col, true)
-      tc:rect(px - 5, py, 11, 2, col, true)
-      tc:rect(px - 4, py + 2, 3, 1, col, true)
-      tc:rect(px, py + 2, 1, 1, col, true)
-      tc:rect(px + 2, py + 2, 3, 1, col, true)
-      tc:rect(px - 1, py + 3, 3, 1, col, true)
-      tc:rect(px - 2, py + 4, 5, 1, col, true)
-      tc:rect(px - 3, py + 5, 7, 1, col, true)
-    elseif suit == 2 then -- Heart
-      tc:rect(px - 3, py - 5, 2, 1, col, true)
-      tc:rect(px + 2, py - 5, 2, 1, col, true)
-      tc:rect(px - 4, py - 4, 4, 1, col, true)
-      tc:rect(px + 1, py - 4, 4, 1, col, true)
-      tc:rect(px - 5, py - 3, 11, 3, col, true)
-      tc:rect(px - 4, py, 9, 1, col, true)
-      tc:rect(px - 3, py + 1, 7, 1, col, true)
-      tc:rect(px - 2, py + 2, 5, 1, col, true)
-      tc:rect(px - 1, py + 3, 3, 1, col, true)
-      tc:rect(px, py + 4, 1, 2, col, true)
-    elseif suit == 3 then -- Diamond (slender casino rhombus)
-      tc:rect(px, py - 5, 1, 1, col, true)
-      tc:rect(px - 1, py - 4, 3, 1, col, true)
-      tc:rect(px - 2, py - 3, 5, 2, col, true)
-      tc:rect(px - 3, py - 1, 7, 1, col, true)
-      tc:rect(px - 4, py, 9, 1, col, true)
-      tc:rect(px - 3, py + 1, 7, 1, col, true)
-      tc:rect(px - 2, py + 2, 5, 2, col, true)
-      tc:rect(px - 1, py + 4, 3, 1, col, true)
-      tc:rect(px, py + 5, 1, 1, col, true)
-    else -- Club (3 distinct round clover leaves + stem + base)
-      tc:rect(px - 1, py - 5, 3, 1, col, true)
-      tc:rect(px - 2, py - 4, 5, 2, col, true)
-      tc:rect(px - 1, py - 2, 3, 1, col, true)
-      tc:rect(px - 4, py - 1, 3, 1, col, true)
-      tc:rect(px, py - 1, 1, 1, col, true)
-      tc:rect(px + 2, py - 1, 3, 1, col, true)
-      tc:rect(px - 5, py, 11, 2, col, true)
-      tc:rect(px - 4, py + 2, 3, 1, col, true)
-      tc:rect(px, py + 2, 1, 1, col, true)
-      tc:rect(px + 2, py + 2, 3, 1, col, true)
-      tc:rect(px - 1, py + 3, 3, 2, col, true)
-      tc:rect(px - 3, py + 5, 7, 1, col, true)
-    end
-    return
-  end
-
-  -- High-DPI scalable pips (r >= 6 on T-Display P4 AMOLED / LCD) using rect scanlines only
-  if suit == 1 then -- Spade
-    local body_bot = I(r * 0.25)
-    local span = math.max(1, r + body_bot)
-    for dy = -r, body_bot, step do
-      local hw = I(((dy + r) * r) / span)
-      tc:rect(px - hw, py + dy, hw * 2 + 1, step, col, true)
-    end
-    local lr = math.max(2, I(r * 0.36))
-    local lx = math.max(2, I(r * 0.42))
-    local ly = I(r * 0.22)
-    fill_disk(tc, px - lx, py + ly, lr, col, step)
-    fill_disk(tc, px + lx, py + ly, lr, col, step)
-    local stem_w = math.max(1, I(r * 0.22) * 2 + 1)
-    local stem_top = I(r * 0.25)
-    tc:rect(px - I(stem_w / 2), py + stem_top, stem_w, math.max(2, r - stem_top + 1), col, true)
-    local base_hw = math.max(2, I(r * 0.55))
-    tc:rect(px - base_hw, py + r, base_hw * 2 + 1, math.max(1, I(r * 0.18)), col, true)
-
-  elseif suit == 2 then -- Heart
-    local lr = math.max(2, I(r * 0.46))
-    local lx = math.max(2, I(r * 0.46))
-    local ly = I(r * 0.32)
-    fill_disk(tc, px - lx, py - ly, lr, col, step)
-    fill_disk(tc, px + lx, py - ly, lr, col, step)
-    local top_dy = -I(r * 0.18)
-    local span = math.max(1, r - top_dy)
-    for dy = top_dy, r, step do
-      local hw = math.max(0, I(((r - dy) * r) / span))
-      tc:rect(px - hw, py + dy, hw * 2 + 1, step, col, true)
-    end
-
-  elseif suit == 3 then -- Diamond
-    for dy = -r, r, step do
-      local hw = math.max(0, I((r - math.abs(dy)) * 0.85))
-      tc:rect(px - hw, py + dy, hw * 2 + 1, step, col, true)
-    end
-
-  else -- Club
-    local lr = math.max(2, I(r * 0.38))
-    local lx = math.max(2, I(r * 0.48))
-    local ty = I(r * 0.48)
-    local by = I(r * 0.14)
-    fill_disk(tc, px, py - ty, lr, col, step)
-    fill_disk(tc, px - lx, py + by, lr, col, step)
-    fill_disk(tc, px + lx, py + by, lr, col, step)
-    local stem_w = math.max(1, I(r * 0.22) * 2 + 1)
-    tc:rect(px - I(stem_w / 2), py - I(r * 0.1), stem_w, math.max(2, r + I(r * 0.1) + 1), col, true)
-    local base_hw = math.max(2, I(r * 0.52))
-    tc:rect(px - base_hw, py + r, base_hw * 2 + 1, math.max(1, I(r * 0.18)), col, true)
-  end
+local px,py=x-ox,y-oy
+local tb=(r<=2)and P2 or((r<=4)and P4 or((r==5)and P5 or nil))
+if tb then local d=tb[s]or tb[4];for i=1,#d,4 do tc:rect(px+d[i],py+d[i+1],d[i+2],d[i+3],c,true)end;return end
+if s==1 then
+local bt=I(r*0.25);local sp=max(1,r+bt)
+for dy=-r,bt,2 do local hw=I(((dy+r)*r)/sp);tc:rect(px-hw,py+dy,hw*2+1,2,c,true)end
+local lr,lx,ly=max(2,I(r*0.36)),max(2,I(r*0.42)),I(r*0.22)
+disk(tc,px-lx,py+ly,lr,c);disk(tc,px+lx,py+ly,lr,c)
+local sw,st,bw=max(1,I(r*0.22)*2+1),I(r*0.25),max(2,I(r*0.55))
+tc:rect(px-I(sw/2),py+st,sw,max(2,r-st+1),c,true);tc:rect(px-bw,py+r,bw*2+1,max(1,I(r*0.18)),c,true)
+elseif s==2 then
+local lr,lx,ly,td=max(2,I(r*0.46)),max(2,I(r*0.46)),I(r*0.32),-I(r*0.18)
+disk(tc,px-lx,py-ly,lr,c);disk(tc,px+lx,py-ly,lr,c)
+local sp=max(1,r-td)
+for dy=td,r,2 do local hw=max(0,I(((r-dy)*r)/sp));tc:rect(px-hw,py+dy,hw*2+1,2,c,true)end
+elseif s==3 then
+for dy=-r,r,2 do local hw=max(0,I((r-abs(dy))*0.85));tc:rect(px-hw,py+dy,hw*2+1,2,c,true)end
+else
+local lr,lx,ty,by=max(2,I(r*0.38)),max(2,I(r*0.48)),I(r*0.48),I(r*0.14)
+disk(tc,px,py-ty,lr,c);disk(tc,px-lx,py+by,lr,c);disk(tc,px+lx,py+by,lr,c)
+local sw,bw=max(1,I(r*0.22)*2+1),max(2,I(r*0.52))
+tc:rect(px-I(sw/2),py-I(r*0.1),sw,max(2,r+I(r*0.1)+1),c,true);tc:rect(px-bw,py+r,bw*2+1,max(1,I(r*0.18)),c,true)
 end
-
--- Draw a playing card at (x, y) of size (cw, ch)
-local function draw_card_box(x, y, cw, ch, card, hidden, pip_sm_ov, pip_lg_ov)
-  x, y, cw, ch = I(x), I(y), I(cw), I(ch)
-  local rad = cw >= 64 and 8 or 3
-  local shad = cw >= 64 and 3 or 1
-  cv:rect(x - 1, y + shad, cw + shad + 1, ch, COL_CARD_SHAD, true, rad)
-
-  if hidden or not card then
-    local pad1 = cw >= 64 and 3 or 1
-    local pad2 = cw >= 64 and 6 or 3
-    cv:rect(x, y, cw, ch, COL_CARD_BG, true, rad)
-    cv:rect(x + pad1, y + pad1, cw - pad1 * 2, ch - pad1 * 2, COL_CARD_BACK, true, math.max(2, rad - 1))
-    if cw >= 26 then
-      cv:rect(x + pad2, y + pad2, cw - pad2 * 2, ch - pad2 * 2, COL_CARD_TRIM, false, math.max(2, rad - 2))
-      local ew = math.max(6, I(cw * 0.28))
-      local eh = math.max(6, I(ch * 0.22))
-      cv:rect(I(x + (cw - ew) / 2), I(y + (ch - eh) / 2), ew, eh, COL_GOLD, false, 2)
-    end
-    return
-  end
-
-  cv:rect(x, y, cw, ch, COL_CARD_BG, true, rad)
-  cv:rect(x, y, cw, ch, 0x64748B, false, rad)
-
-  local col = (card.s == 2 or card.s == 3) and COL_RED or COL_BLACK
-  local rstr = RANKS[card.r]
-
-  if cw <= 24 then
-    cv:text(x + 2, y + 1, rstr, col, 10)
-    draw_suit_pip(x + I(cw / 2), y + ch - 7, card.s, 2)
-  elseif cw < 64 then
-    local p_sm = pip_sm_ov or 3
-    local p_lg = pip_lg_ov or 5
-    cv:text(x + 3, y + 2, rstr, col, 12)
-    if cw >= 32 then
-      draw_suit_pip(x + cw - 7, y + 8, card.s, p_sm)
-    end
-    draw_suit_pip(x + I(cw / 2), y + I(ch / 2) + 5, card.s, p_lg)
-  else
-    -- Large high-DPI card (LilyGo T-Display P4 AMOLED & LCD)
-    local p_sm = pip_sm_ov or L.pip_sm
-    local p_lg = pip_lg_ov or L.pip_lg
-    local rank_fsz = L.f_rank
-    local pad_x, pad_y = 6, 4
-    cv:text(x + pad_x, y + pad_y, rstr, col, rank_fsz)
-    draw_suit_pip(x + cw - p_sm - pad_x - 1, y + pad_y + p_sm + 2, card.s, p_sm)
-    if cw >= 72 and ch >= 96 then
-      local r_w = text_w(rstr, rank_fsz)
-      local r_h = text_h(rank_fsz)
-      cv:text(x + cw - pad_x - r_w, y + ch - pad_y - r_h, rstr, col, rank_fsz)
-      draw_suit_pip(x + pad_x + p_sm + 1, y + ch - pad_y - p_sm - 3, card.s, p_sm)
-    end
-    draw_suit_pip(x + I(cw / 2), I(y + ch / 2), card.s, p_lg)
-  end
 end
-
--- Render one AI opponent pod at (px, py, pw, ph)
-local function draw_ai_pod(idx, px, py, pw, ph)
-  px, py, pw, ph = I(px), I(py), I(pw), I(ph)
-  local p = seats[idx]
-  local is_turn = (state == "ai" and turn_seat == idx)
-  local bg = p.folded and COL_POD_FOLD or COL_POD_BG
-  local border = is_turn and COL_GOLD or (p.status == "WIN!" and C.good or 0x22303C)
-  local rad = DEV.scale >= 2 and 8 or 5
-
-  cv:rect(px, py, pw, ph, bg, true, rad)
-  cv:rect(px, py, pw, ph, border, false, rad)
-
-  local head = p.role ~= "" and (p.name .. "·" .. p.role) or p.name
-  local ncol = p.folded and COL_TEXT_DIM or (is_turn and COL_GOLD or C.text)
-  local scol = p.folded and COL_TEXT_DIM or COL_GOLD
-  local st = p.status ~= "" and p.status or (p.all_in and "ALL-IN" or "WAIT")
-  local st_col = p.folded and COL_TEXT_DIM
-    or (p.status == "WIN!" and C.good or (is_turn and C.accent or C.sub))
-
-  if DEV.scale >= 2 and ph >= 110 then
-    -- High-DPI Tall Pod (T-Display P4 Portrait)
-    local pad_x = 10
-    cv:text(px + pad_x, py + 8, head, ncol, L.f_md)
-    cv:text(px + pad_x, py + 8 + L.lh_md + 2, string.format("$%d", I(p.stack)), scol, L.f_md)
-    cv:text(px + pad_x, py + ph - L.lh_sm - 8, st, st_col, L.f_sm)
-
-    if #p.cards == 2 and not p.folded then
-      local mc_w = 42
-      local mc_h = 58
-      local mc_y = py + 12
-      local mc_x1 = px + pw - mc_w * 2 - 12
-      local mc_x2 = px + pw - mc_w - 6
-      draw_card_box(mc_x1, mc_y, mc_w, mc_h, p.cards[1], not show_all_cards, 3, 6)
-      draw_card_box(mc_x2, mc_y, mc_w, mc_h, p.cards[2], not show_all_cards, 3, 6)
-    end
-  elseif DEV.scale >= 2 then
-    -- High-DPI Wide Pod (T-Display P4 Landscape)
-    local pad_x = 12
-    cv:text(px + pad_x, py + 6, head, ncol, L.f_md)
-    cv:text(px + pad_x, py + 6 + L.lh_md + 2, string.format("$%d", I(p.stack)), scol, L.f_md)
-    cv:text(px + pad_x, py + 6 + L.lh_md * 2 + 4, st, st_col, L.f_sm)
-
-    if #p.cards == 2 and not p.folded then
-      local mc_h = ph - 14
-      local mc_w = I(mc_h * 0.72)
-      draw_card_box(px + pw - mc_w * 2 - 14, py + 7, mc_w, mc_h, p.cards[1], not show_all_cards, 3, 6)
-      draw_card_box(px + pw - mc_w - 8, py + 7, mc_w, mc_h, p.cards[2], not show_all_cards, 3, 6)
-    end
-  else
-    -- Standard Compact Pod (T-Deck 320x208, Heltec V4 240x244, Pager 480x178)
-    cv:text(px + 4, py + 2, head, ncol, L.f_xs)
-    cv:text(px + 4, py + 14, string.format("$%d", I(p.stack)), scol, L.f_sm)
-    cv:text(px + 4, py + 27, st, st_col, L.f_xs)
-
-    if #p.cards == 2 and not p.folded and pw >= 84 then
-      if show_all_cards then
-        draw_card_box(px + pw - 39, py + 4, 18, 25, p.cards[1], false)
-        draw_card_box(px + pw - 20, py + 4, 18, 25, p.cards[2], false)
-      else
-        draw_card_box(px + pw - 33, py + 5, 15, 22, p.cards[1], true)
-        draw_card_box(px + pw - 20, py + 5, 15, 22, p.cards[2], true)
-      end
-    end
-  end
+local function cbox(x,y,cw,ch,cd,hid,smo,lgo)
+x,y,cw,ch=I(x),I(y),I(cw),I(ch)
+local rd,sh=cw>=64 and 8 or 3,cw>=64 and 3 or 1
+cv:rect(x-1,y+sh,cw+sh+1,ch,K_CSH,true,rd)
+if hid or not cd then
+local p1,p2=cw>=64 and 3 or 1,cw>=64 and 6 or 3
+cv:rect(x,y,cw,ch,K_CBG,true,rd);cv:rect(x+p1,y+p1,cw-p1*2,ch-p1*2,K_CBK,true,max(2,rd-1))
+if cw>=26 then
+cv:rect(x+p2,y+p2,cw-p2*2,ch-p2*2,K_CTR,false,max(2,rd-2))
+local ew,eh=max(6,I(cw*0.28)),max(6,I(ch*0.22))
+cv:rect(I(x+(cw-ew)/2),I(y+(ch-eh)/2),ew,eh,K_GLD,false,2)
+end;return
 end
-
--- Render full screen
-draw_screen = function()
-  local top_h   = L.top_h
-  local bot_h   = L.bot_h
-  local table_h = L.table_h
-  local sb, bb  = get_blinds()
-
-  cv:fill(COL_FELT)
-  local margin = DEV.scale >= 2 and 8 or 3
-  cv:rect(margin, top_h + margin - 1, W - margin * 2, table_h - (margin - 1) * 2, COL_FELT_LINE, false, DEV.scale >= 2 and 12 or 7)
-
-  -- Top status bar
-  cv:rect(0, 0, W, top_h, COL_TOPBAR, true)
-  cv:line(0, top_h, W, top_h, 0x1F2933, 1)
-
-  local top_fsz = DEV.scale >= 2 and L.f_md or L.f_sm
-  local top_lh  = text_h(top_fsz)
-  local top_ty  = math.max(1, I((top_h - top_lh) / 2))
-
-  cv:text(L.pad, top_ty, string.format("STACK $%d", I(seats[1].stack)), COL_GOLD, top_fsz)
-
-  local mid_top_str = (state == "title")
-    and string.format("BLINDS $%d/$%d", sb, bb)
-    or string.format("%s · $%d/$%d", STREET_NAMES[street] or "HOLD'EM", sb, bb)
-  local mid_x = I((W - text_w(mid_top_str, top_fsz)) / 2)
-  cv:text(mid_x, top_ty, mid_top_str, C.accent, top_fsz)
-
-  local pk_str = string.format("PEAK $%d%s", I(best_bank), sound_on and "" or " [M]")
-  local rw = text_w(pk_str, top_fsz)
-  cv:text(math.max(mid_x + text_w(mid_top_str, top_fsz) + 6, W - rw - L.pad), top_ty, pk_str, C.sub, top_fsz)
-
-  if state == "title" then
-    local pad_x = DEV.scale >= 2 and 20 or 12
-    local pad_y = DEV.scale >= 2 and 16 or 8
-    local box_w = W - pad_x * 2
-    local box_h = table_h - pad_y * 2
-    local box_y = top_h + pad_y
-    cv:rect(pad_x, box_y, box_w, box_h, COL_FELT_DARK, true, DEV.scale >= 2 and 12 or 8)
-    cv:rect(pad_x, box_y, box_w, box_h, COL_FELT_LINE, false, DEV.scale >= 2 and 12 or 8)
-
-    if DEV.portrait and DEV.scale >= 2 then
-      -- High-DPI Portrait Title Screen (T-Display P4 AMOLED & LCD)
-      local t1 = "TEXAS HOLD'EM"
-      local t2 = "No-Limit 4-Max  ·  3 AI Opponents"
-      local dev_s = string.format("%s  (%dx%d)", DEV.name, W, H)
-
-      local cur_y = box_y + I(box_h * 0.07)
-      cv:text(I((W - text_w(t1, L.f_xl)) / 2), cur_y, t1, COL_GOLD, L.f_xl)
-      cur_y = cur_y + L.lh_xl + 10
-      cv:text(I((W - text_w(t2, L.f_sm)) / 2), cur_y, t2, C.sub, L.f_sm)
-      cur_y = cur_y + L.lh_sm + 6
-      cv:text(I((W - text_w(dev_s, L.f_sm)) / 2), cur_y, dev_s, COL_FELT_LINE, L.f_sm)
-      cur_y = cur_y + L.lh_sm + I(box_h * 0.05)
-
-      local dec_w, dec_h = L.p_cw, L.p_ch
-      local dec_gap = 24
-      draw_card_box(I(W / 2 - dec_w - dec_gap / 2), cur_y, dec_w, dec_h, { r = 1, s = 1 }, false)
-      draw_card_box(I(W / 2 + dec_gap / 2), cur_y, dec_w, dec_h, { r = 1, s = 2 }, false)
-      cur_y = cur_y + dec_h + I(box_h * 0.06)
-
-      local pill = string.format("BLINDS: $%d / $%d   BUY-IN: $%d", sb, bb, I(seats[1].stack))
-      local pw = text_w(pill, L.f_lg)
-      local pill_h = L.lh_lg + 24
-      local pill_w = pw + 48
-      cv:rect(I((W - pill_w) / 2), cur_y, pill_w, pill_h, COL_BTN_ACT, true, 10)
-      cv:rect(I((W - pill_w) / 2), cur_y, pill_w, pill_h, C.accent, false, 10)
-      cv:text(I((W - pw) / 2), cur_y + I((pill_h - L.lh_lg) / 2), pill, C.text, L.f_lg)
-      cur_y = cur_y + pill_h + I(box_h * 0.05)
-
-      local pct = hands_played > 0 and I((hands_won * 100) / hands_played) or 0
-      local stat_str = string.format("Hands Played: %d   ·   Won: %d (%d%%)", I(hands_played), I(hands_won), pct)
-      cv:text(I((W - text_w(stat_str, L.f_sm)) / 2), cur_y, stat_str, C.sub, L.f_sm)
-
-      local hint = "Tap [DEAL HOLD'EM] below to start a hand"
-      cv:text(I((W - text_w(hint, L.f_sm)) / 2), box_y + box_h - L.lh_sm - 18, hint, C.sub, L.f_sm)
-    else
-      -- Standard / Landscape Title Screen
-      local dec_w = DEV.scale >= 2 and 64 or 32
-      local dec_h = DEV.scale >= 2 and 90 or 44
-      if W >= 280 then
-        draw_card_box(pad_x + 10, box_y + 10, dec_w, dec_h, { r = 1, s = 1 }, false, DEV.scale >= 2 and 4 or 3, DEV.scale >= 2 and 9 or 5)
-        draw_card_box(W - pad_x - dec_w - 10, box_y + 10, dec_w, dec_h, { r = 1, s = 2 }, false, DEV.scale >= 2 and 4 or 3, DEV.scale >= 2 and 9 or 5)
-      end
-
-      local t1 = "TEXAS HOLD'EM"
-      local t1_y = box_y + 10
-      cv:text(I((W - text_w(t1, L.f_xl)) / 2), t1_y, t1, COL_GOLD, L.f_xl)
-
-      local t2 = "No-Limit 4-Max  ·  3 AI Opponents"
-      local t2_y = t1_y + L.lh_xl + 4
-      cv:text(I((W - text_w(t2, L.f_sm)) / 2), t2_y, t2, C.sub, L.f_sm)
-
-      local pill = string.format("BLINDS: $%d / $%d   BUY-IN: $%d", sb, bb, I(seats[1].stack))
-      local pw = text_w(pill, L.f_md)
-      local pill_h = L.lh_md + (DEV.scale >= 2 and 16 or 8)
-      local pill_w = pw + (DEV.scale >= 2 and 36 or 20)
-      local py = math.max(t2_y + L.lh_sm + 8, I(box_y + (box_h - pill_h) * 0.54))
-      cv:rect(I((W - pill_w) / 2), py, pill_w, pill_h, COL_BTN_ACT, true, 5)
-      cv:rect(I((W - pill_w) / 2), py, pill_w, pill_h, C.accent, false, 5)
-      cv:text(I((W - pw) / 2), py + I((pill_h - L.lh_md) / 2), pill, C.text, L.f_md)
-
-      local hint = W >= 300 and "Tap [DEAL HOLD'EM] or press [D] to play" or "Tap [DEAL] below to play"
-      local hint_y = box_y + box_h - L.lh_sm - (DEV.scale >= 2 and 12 or 6)
-      if hint_y > py + pill_h + 4 then
-        cv:text(I((W - text_w(hint, L.f_sm)) / 2), hint_y, hint, C.sub, L.f_sm)
-      end
-    end
-
-  elseif DEV.portrait and DEV.scale >= 2 then
-    -- High-DPI Portrait Table Layout (LilyGo T-Display P4 AMOLED 568x1166 & LCD 540x1102)
-    local pad_x = 16
-    local pod_gap = 10
-    local pod_w = I((W - pad_x * 2 - pod_gap * 2) / 3)
-    local pod_h = 126
-    local pod_y = top_h + 16
-
-    draw_ai_pod(2, pad_x, pod_y, pod_w, pod_h)
-    draw_ai_pod(3, pad_x + pod_w + pod_gap, pod_y, pod_w, pod_h)
-    draw_ai_pod(4, pad_x + (pod_w + pod_gap) * 2, pod_y, pod_w, pod_h)
-
-    -- Pot & Call Status Pill
-    local pot_box_y = pod_y + pod_h + 22
-    local pot_box_h = 68
-    cv:rect(pad_x, pot_box_y, W - pad_x * 2, pot_box_h, COL_FELT_DARK, true, 10)
-    cv:rect(pad_x, pot_box_y, W - pad_x * 2, pot_box_h, COL_FELT_LINE, false, 10)
-
-    local pot_str = string.format("TOTAL POT: $%d", I(pot))
-    cv:text(pad_x + 18, pot_box_y + I((pot_box_h - L.lh_xl) / 2), pot_str, COL_GOLD, L.f_xl)
-
-    local to_call = I(math.max(0, cur_bet - seats[1].street_bet))
-    local call_str = (state == "done")
-      and "HAND COMPLETE"
-      or (to_call > 0 and string.format("TO CALL: $%d", to_call) or "CHECK AVAILABLE")
-    cv:text(W - pad_x - text_w(call_str, L.f_md) - 18, pot_box_y + I((pot_box_h - L.lh_md) / 2), call_str, C.accent, L.f_md)
-
-    -- 5 Community Card Slots centered horizontally
-    local cc_w, cc_h, cc_gap = L.cc_w, L.cc_h, L.cc_gap
-    local cc_total_w = cc_w * 5 + cc_gap * 4
-    local cc_start_x = I((W - cc_total_w) / 2)
-    local cc_y = pot_box_y + pot_box_h + 24
-
-    for i = 1, 5 do
-      local cx = cc_start_x + (i - 1) * (cc_w + cc_gap)
-      if board[i] then
-        draw_card_box(cx, cc_y, cc_w, cc_h, board[i], false)
-      else
-        cv:rect(cx, cc_y, cc_w, cc_h, COL_FELT_DARK, true, 8)
-        cv:rect(cx, cc_y, cc_w, cc_h, COL_FELT_LINE, false, 8)
-      end
-    end
-
-    -- Player Section at Bottom
-    local p = seats[1]
-    local p_info_h = 98
-    local p_info_y = top_h + table_h - p_info_h - 16
-    local p_cards_y = p_info_y - L.p_ch - 18
-
-    -- Dedicated middle strip between Community Cards and Player Hole Cards for Outcome Banner
-    local mid_top = cc_y + cc_h + 12
-    local mid_bot = p_cards_y - 12
-    local mid_cy  = I((mid_top + mid_bot) / 2)
-
-    if state == "done" and banner_title ~= "" then
-      local bw = W - pad_x * 2 - 24
-      local bh = L.lh_xl + L.lh_md + 28
-      local bx = I((W - bw) / 2)
-      local by = I(mid_cy - bh / 2)
-      cv:rect(bx, by, bw, bh, 0x0D131A, true, 10)
-      cv:rect(bx, by, bw, bh, banner_col, false, 10)
-      cv:text(I((W - text_w(banner_title, L.f_xl)) / 2), by + 8, banner_title, banner_col, L.f_xl)
-      cv:text(I((W - text_w(banner_sub, L.f_md)) / 2), by + 12 + L.lh_xl, banner_sub, C.text, L.f_md)
-    else
-      cv:line(pad_x + 24, mid_cy, W - pad_x - 24, mid_cy, COL_FELT_LINE, 1)
-    end
-
-    -- Player's 2 Hole Cards centered
-    if #p.cards == 2 then
-      local hc_gap = 18
-      local hc_x1 = I(W / 2 - L.p_cw - hc_gap / 2)
-      local hc_x2 = I(W / 2 + hc_gap / 2)
-      draw_card_box(hc_x1, p_cards_y, L.p_cw, L.p_ch, p.cards[1], false)
-      draw_card_box(hc_x2, p_cards_y, L.p_cw, L.p_ch, p.cards[2], false)
-    end
-
-    -- Player HUD Box below Hole Cards
-    cv:rect(pad_x, p_info_y, W - pad_x * 2, p_info_h, COL_POD_BG, true, 10)
-    cv:rect(pad_x, p_info_y, W - pad_x * 2, p_info_h, state == "player" and C.accent or 0x22303C, false, 10)
-
-    local you_hdr = p.role ~= "" and string.format("YOU [%s]  ·  STREET BET: $%d", p.role, I(p.street_bet)) or string.format("YOU  ·  STREET BET: $%d", I(p.street_bet))
-    cv:text(pad_x + 16, p_info_y + 10, you_hdr, C.text, L.f_md)
-
-    local _, _, hname = eval_best_hand(p.cards, board)
-    local h_str = p.folded and "FOLDED" or hname
-    cv:text(W - pad_x - text_w(h_str, L.f_md) - 16, p_info_y + 10, h_str, p.folded and C.bad or COL_GOLD, L.f_md)
-
-    local line2 = (state == "player")
-      and string.format("RAISE TARGET: $%d   (Tap +BB or Up/Down)", I(raise_to))
-      or (p.status ~= "" and ("STATUS: " .. p.status) or "WAITING FOR TABLE...")
-    cv:text(pad_x + 16, p_info_y + 14 + L.lh_md, line2, C.accent, L.f_sm)
-
-    local line3 = "Touch action buttons below  ·  Tap table after hand to deal"
-    cv:text(pad_x + 16, p_info_y + 18 + L.lh_md + L.lh_sm, line3, C.sub, L.f_sm)
-
-  elseif DEV.portrait then
-    -- Compact Portrait Layout (Heltec V4 240x244)
-    local pod_y = top_h + 4
-    local pod_w = I((W - 16) / 3)
-    draw_ai_pod(2, 4, pod_y, pod_w, 40)
-    draw_ai_pod(3, 4 + pod_w + 4, pod_y, pod_w, 40)
-    draw_ai_pod(4, 4 + (pod_w + 4) * 2, pod_y, pod_w, 40)
-
-    local strip_y = pod_y + 43
-    local to_call = I(math.max(0, cur_bet - seats[1].street_bet))
-    local pot_line = string.format("POT $%d   ·   %s", I(pot), to_call > 0 and string.format("CALL $%d", to_call) or "CHECK OK")
-    cv:text(I((W - text_w(pot_line, L.f_sm)) / 2), strip_y, pot_line, COL_GOLD, L.f_sm)
-
-    local cc_w, cc_h, cc_gap = L.cc_w, L.cc_h, L.cc_gap
-    local cc_total_w = cc_w * 5 + cc_gap * 4
-    local cc_start_x = I((W - cc_total_w) / 2)
-    local cc_y = strip_y + 16
-    for i = 1, 5 do
-      local cx = cc_start_x + (i - 1) * (cc_w + cc_gap)
-      if board[i] then
-        draw_card_box(cx, cc_y, cc_w, cc_h, board[i], false)
-      else
-        cv:rect(cx, cc_y, cc_w, cc_h, COL_FELT_DARK, true, 3)
-        cv:rect(cx, cc_y, cc_w, cc_h, COL_FELT_LINE, false, 3)
-      end
-    end
-
-    local py = cc_y + cc_h + 6
-    local p = seats[1]
-    if #p.cards == 2 then
-      draw_card_box(6, py, L.p_cw, L.p_ch, p.cards[1], false)
-      draw_card_box(34, py, L.p_cw, L.p_ch, p.cards[2], false)
-    end
-
-    local info_x = 74
-    local info_w = W - info_x - 4
-    if state == "done" and banner_title ~= "" then
-      cv:rect(info_x, py, info_w, L.p_ch, 0x0D131A, true, 5)
-      cv:rect(info_x, py, info_w, L.p_ch, banner_col, false, 5)
-      cv:text(info_x + I((info_w - text_w(banner_title, L.f_md)) / 2), py + 6, banner_title, banner_col, L.f_md)
-      cv:text(info_x + I((info_w - text_w(banner_sub, L.f_xs)) / 2), py + 24, banner_sub, C.text, L.f_xs)
-    else
-      cv:rect(info_x, py, info_w, L.p_ch, COL_POD_BG, true, 5)
-      cv:rect(info_x, py, info_w, L.p_ch, state == "player" and C.accent or 0x22303C, false, 5)
-      local _, _, hname = eval_best_hand(p.cards, board)
-      cv:text(info_x + 4, py + 4, p.folded and "FOLDED" or hname, COL_GOLD, L.f_xs)
-      cv:text(info_x + 4, py + 18, string.format("BET $%d  R:$%d", I(p.street_bet), I(raise_to)), C.accent, L.f_xs)
-      cv:text(info_x + 4, py + 31, p.status ~= "" and p.status or "YOUR TURN", C.sub, L.f_xs)
-    end
-
-  else
-    -- Landscape Table Layout (LilyGo T-Deck 320x208, T-Display P4 Landscape, T-LoRa Pager)
-    local v_pad = DEV.scale >= 2 and 12 or 4
-    local h_pad = DEV.scale >= 2 and 16 or 6
-    local pod_gap = DEV.scale >= 2 and 12 or 4
-    local pod_y = top_h + v_pad
-    local pod_h = DEV.scale >= 2 and I(table_h * 0.27) or 40
-    local pod_w = I((W - h_pad * 2 - pod_gap * 2) / 3)
-
-    draw_ai_pod(2, h_pad, pod_y, pod_w, pod_h)
-    draw_ai_pod(3, h_pad + pod_w + pod_gap, pod_y, pod_w, pod_h)
-    draw_ai_pod(4, h_pad + (pod_w + pod_gap) * 2, pod_y, pod_w, pod_h)
-
-    -- 2. Middle Row: Pot Info Box (Left) + 5 Community Cards (Right)
-    local mid_y = pod_y + pod_h + v_pad
-    local cc_w, cc_h, cc_gap = L.cc_w, L.cc_h, L.cc_gap
-    local cc_total_w = cc_w * 5 + cc_gap * 4
-    local cc_start_x = W - h_pad - cc_total_w
-    local pot_w = math.max(DEV.scale >= 2 and 220 or 92, cc_start_x - h_pad - (DEV.scale >= 2 and 16 or 6))
-
-    cv:rect(h_pad, mid_y, pot_w, cc_h, COL_FELT_DARK, true, DEV.scale >= 2 and 8 or 5)
-    cv:rect(h_pad, mid_y, pot_w, cc_h, COL_FELT_LINE, false, DEV.scale >= 2 and 8 or 5)
-    local p_tx = h_pad + (DEV.scale >= 2 and 14 or 5)
-    cv:text(p_tx, mid_y + (DEV.scale >= 2 and 8 or 4), "TOTAL POT", C.sub, L.f_xs)
-    cv:text(p_tx, mid_y + (DEV.scale >= 2 and (10 + L.lh_xs) or 16), string.format("$%d", I(pot)), COL_GOLD, L.f_lg)
-
-    local to_call = I(math.max(0, cur_bet - seats[1].street_bet))
-    local call_info = (state == "done")
-      and "HAND OVER"
-      or (to_call > 0 and string.format("TO CALL: $%d", to_call) or "CHECK OK")
-    cv:text(p_tx, mid_y + cc_h - L.lh_xs - (DEV.scale >= 2 and 8 or 3), call_info, C.accent, L.f_xs)
-
-    for i = 1, 5 do
-      local cx = cc_start_x + (i - 1) * (cc_w + cc_gap)
-      if board[i] then
-        draw_card_box(cx, mid_y, cc_w, cc_h, board[i], false)
-      else
-        cv:rect(cx, mid_y, cc_w, cc_h, COL_FELT_DARK, true, DEV.scale >= 2 and 8 or 3)
-        cv:rect(cx, mid_y, cc_w, cc_h, COL_FELT_LINE, false, DEV.scale >= 2 and 8 or 3)
-      end
-    end
-
-    -- 3. Bottom Player Row
-    local py = mid_y + cc_h + v_pad
-    local p = seats[1]
-    local hc_w = DEV.scale >= 2 and L.p_cw or 34
-    local hc_step = DEV.scale >= 2 and (hc_w + 8) or 36
-
-    if #p.cards == 2 then
-      draw_card_box(h_pad, py, hc_w, L.p_ch, p.cards[1], false)
-      draw_card_box(h_pad + hc_step, py, hc_w, L.p_ch, p.cards[2], false)
-    end
-
-    local info_x = h_pad + hc_step + hc_w + (DEV.scale >= 2 and 16 or 6)
-    local info_w = W - info_x - h_pad
-    local info_h = L.p_ch - (DEV.scale >= 2 and 0 or 4)
-    local info_y = py + (DEV.scale >= 2 and 0 or 2)
-
-    if state == "done" and banner_title ~= "" then
-      cv:rect(info_x, info_y, info_w, info_h, 0x0D131A, true, 6)
-      cv:rect(info_x, info_y, info_w, info_h, banner_col, false, 6)
-      local ty1 = info_y + I((info_h - (L.lh_lg + L.lh_sm)) / 2)
-      cv:text(info_x + I((info_w - text_w(banner_title, L.f_lg)) / 2), ty1, banner_title, banner_col, L.f_lg)
-      cv:text(info_x + I((info_w - text_w(banner_sub, L.f_sm)) / 2), ty1 + L.lh_lg + 2, banner_sub, C.text, L.f_sm)
-    else
-      cv:rect(info_x, info_y, info_w, info_h, COL_POD_BG, true, 5)
-      local p_border = (state == "player") and C.accent or 0x22303C
-      cv:rect(info_x, info_y, info_w, info_h, p_border, false, 5)
-
-      local pad_in = DEV.scale >= 2 and 14 or 6
-      local you_hdr = p.role ~= "" and string.format("YOU [%s]  BET $%d", p.role, I(p.street_bet)) or string.format("YOU  BET $%d", I(p.street_bet))
-      cv:text(info_x + pad_in, info_y + (DEV.scale >= 2 and 8 or 3), you_hdr, C.text, L.f_sm)
-
-      local _, _, hname = eval_best_hand(p.cards, board)
-      local h_str = p.folded and "FOLDED" or hname
-      cv:text(info_x + info_w - text_w(h_str, L.f_sm) - pad_in, info_y + (DEV.scale >= 2 and 8 or 3), h_str, p.folded and C.bad or COL_GOLD, L.f_sm)
-
-      local line2 = (state == "player")
-        and string.format("RAISE TARGET: $%d  [Up/Down]", I(raise_to))
-        or (p.status ~= "" and ("STATUS: " .. p.status) or "WAITING FOR TABLE...")
-      cv:text(info_x + pad_in, info_y + I((info_h - L.lh_xs) / 2) + 1, line2, C.accent, L.f_xs)
-
-      local line3 = "[F]Fold  [C]Call/Chk  [R]Raise  [A]All-In"
-      cv:text(info_x + pad_in, info_y + info_h - L.lh_xs - (DEV.scale >= 2 and 6 or 1), line3, C.sub, L.f_xs)
-    end
-  end
-
-  -- Bottom button bar
-  local by = H - bot_h
-  cv:rect(0, by, W, bot_h, COL_BOTBAR, true)
-  cv:line(0, by, W, by, 0x1F2933, 1)
-
-  local nb = #active_btns
-  if nb > 0 then
-    local gap = (DEV.scale < 2 and nb >= 5) and 3 or L.btn_gap
-    local pad_v = DEV.scale >= 2 and 8 or 3
-    local avail_w = W - gap * (nb + 1)
-    local bh = bot_h - pad_v * 2
-    local btn_fsz = DEV.scale >= 2 and L.f_md or L.f_sm
-    local btn_lh  = text_h(btn_fsz)
-    local btn_rad = DEV.scale >= 2 and 8 or 4
-    local min_pad = DEV.scale >= 2 and 20 or 8
-
-    local weights = {}
-    local lbls = {}
-    local tws = {}
-    local total_wt = 0
-    local widest_i = 1
-
-    for i = 1, nb do
-      local b = active_btns[i]
-      local lbl = b.label
-      local tw = text_w(lbl, btn_fsz)
-      local wt = math.max(b.weight or 60, tw + min_pad)
-      weights[i] = wt
-      lbls[i] = lbl
-      tws[i] = tw
-      total_wt = total_wt + wt
-      if wt > weights[widest_i] then
-        widest_i = i
-      end
-    end
-
-    local bws = {}
-    local used_w = 0
-    for i = 1, nb do
-      bws[i] = I((avail_w * weights[i]) / total_wt)
-      used_w = used_w + bws[i]
-    end
-    if used_w < avail_w then
-      bws[widest_i] = bws[widest_i] + (avail_w - used_w)
-    end
-
-    local cur_bx = gap
-    for i = 1, nb do
-      local b = active_btns[i]
-      local bw = bws[i]
-      local bx = cur_bx
-      local bby = by + pad_v
-      cur_bx = cur_bx + bw + gap
-      b.x, b.y, b.w, b.h = bx, bby, bw, bh
-
-      local bg = not b.enabled and COL_BTN_DIS or (b.primary and COL_BTN_ACT or COL_BTN)
-      cv:rect(bx, bby, bw, bh, bg, true, btn_rad)
-
-      if i == focus_idx and b.enabled then
-        cv:rect(bx, bby, bw, bh, b.primary and COL_GOLD or C.accent, false, btn_rad)
-      elseif b.enabled then
-        cv:rect(bx, bby, bw, bh, 0x2B3642, false, btn_rad)
-      end
-
-      local tcol = not b.enabled and COL_TEXT_DIM or (b.primary and COL_GOLD or C.text)
-      local lbl = lbls[i]
-      local tw = tws[i]
-      if tw > bw - 6 and lbl:find(" %[") then
-        lbl = lbl:gsub(" %[.*%]", "")
-        tw = text_w(lbl, btn_fsz)
-      end
-      local tx = bx + math.max(2, I((bw - tw) / 2))
-      local ty = bby + math.max(1, I((bh - btn_lh) / 2))
-      cv:text(tx, ty, lbl, tcol, btn_fsz)
-    end
-  end
+box(x,y,cw,ch,K_CBG,0x64748B,rd)
+local c,rs=(cd.s==2 or cd.s==3)and K_RED or K_BLK,RANKS[cd.r]
+if cw<=24 then cv:text(x+2,y+1,rs,c,10);pip(x+I(cw/2),y+ch-7,cd.s,2)
+elseif cw<64 then
+cv:text(x+3,y+2,rs,c,12);if cw>=32 then pip(x+cw-7,y+8,cd.s,smo or 3)end
+pip(x+I(cw/2),y+I(ch/2)+5,cd.s,lgo or 5)
+else
+local sm,lg=smo or p_sm,lgo or p_lg
+cv:text(x+6,y+4,rs,c,f_rk);pip(x+cw-sm-7,y+sm+6,cd.s,sm)
+if cw>=72 and ch>=96 then cv:text(x+cw-6-tw(rs,f_rk),y+ch-4-th(f_rk),rs,c,f_rk);pip(x+sm+7,y+ch-sm-7,cd.s,sm)end
+pip(x+I(cw/2),I(y+ch/2),cd.s,lg)
 end
-
-local function cycle_focus(dir)
-  local n = #active_btns
-  if n == 0 then return end
-  for _ = 1, n do
-    focus_idx = ((focus_idx - 1 + dir) % n) + 1
-    if active_btns[focus_idx] and active_btns[focus_idx].enabled then
-      break
-    end
-  end
-  draw_screen()
 end
-
-local function trigger_focused()
-  local b = active_btns[focus_idx]
-  if b and b.enabled and b.fn then
-    b.fn()
-  end
+local function ai_pod(idx,px,py,pw,ph)
+px,py,pw,ph=I(px),I(py),I(pw),I(ph);local p=seats[idx];local it=(state=="ai"and trn_s==idx)
+box(px,py,pw,ph,p.fold and K_PFD or K_POD,it and K_GLD or(p.st=="WIN!"and C.good or 0x22303C),s2 and 8 or 5)
+local hd=p.role~=""and(p.name.."·"..p.role)or p.name
+local nc,sc=p.fold and K_DIM or(it and K_GLD or C.text),p.fold and K_DIM or K_GLD
+local st,stc=p.st~=""and p.st or(p.all and"ALL-IN"or"WAIT"),p.fold and K_DIM or(p.st=="WIN!"and C.good or(it and C.accent or C.sub))
+if s2 and ph>=110 then
+cv:text(px+10,py+8,hd,nc,f_md);cv:text(px+10,py+10+lh_md,fmt("$%d",I(p.stack)),sc,f_md);cv:text(px+10,py+ph-lh_sm-8,st,stc,f_sm)
+if#p.cards==2 and not p.fold then cbox(px+pw-96,py+12,42,58,p.cards[1],not show_all,3,6);cbox(px+pw-48,py+12,42,58,p.cards[2],not show_all,3,6)end
+elseif s2 then
+cv:text(px+12,py+6,hd,nc,f_md);cv:text(px+12,py+8+lh_md,fmt("$%d",I(p.stack)),sc,f_md);cv:text(px+12,py+10+lh_md*2,st,stc,f_sm)
+if#p.cards==2 and not p.fold then local mh=ph-14;local mw=I(mh*0.72);cbox(px+pw-mw*2-14,py+7,mw,mh,p.cards[1],not show_all,3,6);cbox(px+pw-mw-8,py+7,mw,mh,p.cards[2],not show_all,3,6)end
+else
+cv:text(px+4,py+2,hd,nc,f_xs);cv:text(px+4,py+14,fmt("$%d",I(p.stack)),sc,f_sm);cv:text(px+4,py+27,st,stc,f_xs)
+if#p.cards==2 and not p.fold and pw>=84 then
+local w,h,o=show_all and 18 or 15,show_all and 25 or 22,show_all and 39 or 33
+cbox(px+pw-o,py+4,w,h,p.cards[1],not show_all);cbox(px+pw-20,py+4,w,h,p.cards[2],not show_all)
 end
-
--- WADAMESH Lifecycle Callbacks
-function app.on_open(w, h)
-  local brd = (sys.board and sys.board()) or {}
-  W = I((w and w > 0) and w or ((brd.w and brd.w > 0) and brd.w or 320))
-  H = I((h and h > 0) and h or ((brd.h and brd.h > 0) and brd.h or 208))
-
-  compute_layout()
-
-  seats[1].stack = I(tonumber(store.get("he_bank", START_STACK)) or START_STACK)
-  best_bank      = I(tonumber(store.get("he_best", START_STACK)) or START_STACK)
-  hands_won      = I(tonumber(store.get("he_wins", 0)) or 0)
-  hands_played   = I(tonumber(store.get("he_hands", 0)) or 0)
-  blind_idx      = I(clamp(tonumber(store.get("he_blind", 1)) or 1, 1, #BLIND_LEVELS))
-
-  local _, bb = get_blinds()
-  if seats[1].stack < bb then seats[1].stack = START_STACK end
-  for i = 2, 4 do seats[i].stack = START_STACK end
-
-  cv = create_screen_canvas(W, H)
-
-  build_deck()
-  state = "title"
-  rebuild_buttons()
-  draw_screen()
 end
-
-function app.on_tick(dt)
-  if state ~= "ai" then
-    timer.stop()
-    return
-  end
-
-  local active, can_act = count_players()
-  if active <= 1 then
-    resolve_hand(true)
-    return
-  end
-
-  if can_act < 2 then
-    next_street_or_showdown()
-    return
-  end
-
-  local p = seats[turn_seat]
-  if p and not p.is_human and not p.folded and not p.all_in then
-    ai_decide(turn_seat)
-  else
-    advance_turn()
-  end
 end
-
+local function brow(sx,y,r)
+for i=1,5 do
+local cx=sx+(i-1)*(cc_w+cc_g)
+if board[i]then cbox(cx,y,cc_w,cc_h,board[i],false)else box(cx,y,cc_w,cc_h,K_FDK,K_FLN,r)end
+end
+end
+draw_screen=function()
+local sb,bb=blinds();local cx=I(W/2)
+cv:fill(K_FLT);local m=s2 and 8 or 3
+cv:rect(m,top_h+m-1,W-m*2,tbl_h-(m-1)*2,K_FLN,false,s2 and 12 or 7)
+cv:rect(0,0,W,top_h,K_BAR,true);cv:line(0,top_h,W,top_h,0x1F2933,1)
+local tf=s2 and f_md or f_sm;local ty=max(1,I((top_h-th(tf))/2))
+cv:text(pad,ty,fmt("STACK $%d",I(seats[1].stack)),K_GLD,tf)
+local ms=(state=="title")and fmt("BLINDS $%d/$%d",sb,bb)or fmt("%s · $%d/$%d",SNAMES[street]or"HOLD'EM",sb,bb)
+local mx=I((W-tw(ms,tf))/2);cv:text(mx,ty,ms,C.accent,tf)
+local ps=fmt("PEAK $%d%s",I(best_b),snd and""or" [M]")
+cv:text(max(mx+tw(ms,tf)+6,W-tw(ps,tf)-pad),ty,ps,C.sub,tf)
+if state=="title"then
+local px,py=s2 and 20 or 12,s2 and 16 or 8;local bw,bh,by=W-px*2,tbl_h-py*2,top_h+py
+box(px,by,bw,bh,K_FDK,K_FLN,s2 and 12 or 8)
+local pl=fmt("BLINDS: $%d / $%d   BUY-IN: $%d",sb,bb,I(seats[1].stack))
+if port and s2 then
+local cy=by+I(bh*0.07)
+tcx(cx,cy,TIT_T,K_GLD,f_xl);cy=cy+lh_xl+10
+tcx(cx,cy,SUB_T,C.sub,f_sm);cy=cy+lh_sm+6
+tcx(cx,cy,fmt("%s  (%dx%d)",dname,W,H),K_FLN,f_sm);cy=cy+lh_sm+I(bh*0.05)
+cbox(cx-p_cw-12,cy,p_cw,p_ch,{r=1,s=1},false);cbox(cx+12,cy,p_cw,p_ch,{r=1,s=2},false)
+cy=cy+p_ch+I(bh*0.06);local pw,ph=tw(pl,f_lg),lh_lg+24
+box(cx-I((pw+48)/2),cy,pw+48,ph,K_BAC,C.accent,10);tcx(cx,cy+I((ph-lh_lg)/2),pl,C.text,f_lg);cy=cy+ph+I(bh*0.05)
+local pct=h_play>0 and I((h_won*100)/h_play)or 0
+tcx(cx,cy,fmt("Hands Played: %d   ·   Won: %d (%d%%)",I(h_play),I(h_won),pct),C.sub,f_sm)
+tcx(cx,by+bh-lh_sm-18,"Tap [DEAL HOLD'EM] below to start a hand",C.sub,f_sm)
+else
+local dw,dh=s2 and 64 or 32,s2 and 90 or 44
+if W>=280 then cbox(px+10,by+10,dw,dh,{r=1,s=1},false,s2 and 4 or 3,s2 and 9 or 5);cbox(W-px-dw-10,by+10,dw,dh,{r=1,s=2},false,s2 and 4 or 3,s2 and 9 or 5)end
+tcx(cx,by+10,TIT_T,K_GLD,f_xl);local t2y=by+14+lh_xl
+tcx(cx,t2y,SUB_T,C.sub,f_sm)
+local pw,ph=tw(pl,f_md),lh_md+(s2 and 16 or 8);local plw=pw+(s2 and 36 or 20)
+local p_y=max(t2y+lh_sm+8,I(by+(bh-ph)*0.54))
+box(cx-I(plw/2),p_y,plw,ph,K_BAC,C.accent,5);tcx(cx,p_y+I((ph-lh_md)/2),pl,C.text,f_md)
+local hy=by+bh-lh_sm-(s2 and 12 or 6)
+if hy>p_y+ph+4 then tcx(cx,hy,W>=300 and"Tap [DEAL HOLD'EM] or press [D] to play"or"Tap [DEAL] below to play",C.sub,f_sm)end
+end
+elseif port and s2 then
+local px,pg,ph,py=16,10,126,top_h+16;local pw=I((W-px*2-pg*2)/3)
+for i=0,2 do ai_pod(i+2,px+i*(pw+pg),py,pw,ph)end
+local pby,pbh=py+ph+22,68;box(px,pby,W-px*2,pbh,K_FDK,K_FLN,10)
+cv:text(px+18,pby+I((pbh-lh_xl)/2),fmt("TOTAL POT: $%d",I(pot)),K_GLD,f_xl)
+local tc=I(max(0,c_bet-seats[1].sb))
+local cs=(state=="done")and"HAND COMPLETE"or(tc>0 and fmt("TO CALL: $%d",tc)or"CHECK AVAILABLE")
+cv:text(W-px-tw(cs,f_md)-18,pby+I((pbh-lh_md)/2),cs,C.accent,f_md)
+local ccy=pby+pbh+24;brow(I((W-(cc_w*5+cc_g*4))/2),ccy,8)
+local p,pih,piy=seats[1],98,top_h+tbl_h-114
+local pcy=piy-p_ch-18;local mcy=I((ccy+cc_h+pcy)/2)
+if state=="done"and b_tit~=""then
+local bw,bh=W-px*2-24,lh_xl+lh_md+28;local by=I(mcy-bh/2)
+box(cx-I(bw/2),by,bw,bh,0x0D131A,b_col,10);tcx(cx,by+8,b_tit,b_col,f_xl);tcx(cx,by+12+lh_xl,b_sub,C.text,f_md)
+else cv:line(px+24,mcy,W-px-24,mcy,K_FLN,1)end
+if#p.cards==2 then cbox(cx-p_cw-9,pcy,p_cw,p_ch,p.cards[1],false);cbox(cx+9,pcy,p_cw,p_ch,p.cards[2],false)end
+box(px,piy,W-px*2,pih,K_POD,state=="player"and C.accent or 0x22303C,10)
+cv:text(px+16,piy+10,p.role~=""and fmt("YOU [%s]  ·  STREET BET: $%d",p.role,I(p.sb))or fmt("YOU  ·  STREET BET: $%d",I(p.sb)),C.text,f_md)
+local _,_,hn=eval_hand(p.cards,board);local hs=p.fold and"FOLDED"or hn
+cv:text(W-px-tw(hs,f_md)-16,piy+10,hs,p.fold and C.bad or K_GLD,f_md)
+cv:text(px+16,piy+14+lh_md,(state=="player")and fmt("RAISE TARGET: $%d   (Tap +BB or Up/Down)",I(r_to))or(p.st~=""and("STATUS: "..p.st)or"WAITING FOR TABLE..."),C.accent,f_sm)
+cv:text(px+16,piy+18+lh_md+lh_sm,"Touch action buttons below  ·  Tap table after hand to deal",C.sub,f_sm)
+elseif port then
+local py,pw=top_h+4,I((W-16)/3);for i=0,2 do ai_pod(i+2,4+i*(pw+4),py,pw,40)end
+local sy=py+43;local tc=I(max(0,c_bet-seats[1].sb))
+tcx(cx,sy,fmt("POT $%d   ·   %s",I(pot),tc>0 and fmt("CALL $%d",tc)or"CHECK OK"),K_GLD,f_sm)
+local ccy=sy+16;brow(I((W-(cc_w*5+cc_g*4))/2),ccy,3)
+local hy,p=ccy+cc_h+6,seats[1]
+if#p.cards==2 then cbox(6,hy,p_cw,p_ch,p.cards[1],false);cbox(34,hy,p_cw,p_ch,p.cards[2],false)end
+local ix,iw=74,W-78
+if state=="done"and b_tit~=""then
+box(ix,hy,iw,p_ch,0x0D131A,b_col,5);tcx(ix+I(iw/2),hy+6,b_tit,b_col,f_md);tcx(ix+I(iw/2),hy+24,b_sub,C.text,f_xs)
+else
+box(ix,hy,iw,p_ch,K_POD,state=="player"and C.accent or 0x22303C,5)
+local _,_,hn=eval_hand(p.cards,board)
+cv:text(ix+4,hy+4,p.fold and"FOLDED"or hn,K_GLD,f_xs);cv:text(ix+4,hy+18,fmt("BET $%d  R:$%d",I(p.sb),I(r_to)),C.accent,f_xs);cv:text(ix+4,hy+31,p.st~=""and p.st or"YOUR TURN",C.sub,f_xs)
+end
+else
+local vp,hp,pg=s2 and 12 or 4,s2 and 16 or 6,s2 and 12 or 4
+local py,ph=top_h+vp,s2 and I(tbl_h*0.27)or 40;local pw=I((W-hp*2-pg*2)/3)
+for i=0,2 do ai_pod(i+2,hp+i*(pw+pg),py,pw,ph)end
+local my=py+ph+vp;local ccx=W-hp-(cc_w*5+cc_g*4)
+local pot_w=max(s2 and 220 or 92,ccx-hp-(s2 and 16 or 6))
+box(hp,my,pot_w,cc_h,K_FDK,K_FLN,s2 and 8 or 5);local ptx=hp+(s2 and 14 or 5)
+cv:text(ptx,my+(s2 and 8 or 4),"TOTAL POT",C.sub,f_xs);cv:text(ptx,my+(s2 and(10+lh_xs)or 16),fmt("$%d",I(pot)),K_GLD,f_lg)
+local tc=I(max(0,c_bet-seats[1].sb))
+cv:text(ptx,my+cc_h-lh_xs-(s2 and 8 or 3),(state=="done")and"HAND OVER"or(tc>0 and fmt("TO CALL: $%d",tc)or"CHECK OK"),C.accent,f_xs)
+brow(ccx,my,s2 and 8 or 3)
+local hy,p=my+cc_h+vp,seats[1];local hcw=s2 and p_cw or 34;local hcs=s2 and(hcw+8)or 36
+if#p.cards==2 then cbox(hp,hy,hcw,p_ch,p.cards[1],false);cbox(hp+hcs,hy,hcw,p_ch,p.cards[2],false)end
+local ix=hp+hcs+hcw+(s2 and 16 or 6);local iw,ih,iy=W-ix-hp,p_ch-(s2 and 0 or 4),hy+(s2 and 0 or 2)
+if state=="done"and b_tit~=""then
+box(ix,iy,iw,ih,0x0D131A,b_col,6);local ty1=iy+I((ih-(lh_lg+lh_sm))/2)
+tcx(ix+I(iw/2),ty1,b_tit,b_col,f_lg);tcx(ix+I(iw/2),ty1+lh_lg+2,b_sub,C.text,f_sm)
+else
+box(ix,iy,iw,ih,K_POD,(state=="player")and C.accent or 0x22303C,5);local pin=s2 and 14 or 6
+cv:text(ix+pin,iy+(s2 and 8 or 3),p.role~=""and fmt("YOU [%s]  BET $%d",p.role,I(p.sb))or fmt("YOU  BET $%d",I(p.sb)),C.text,f_sm)
+local _,_,hn=eval_hand(p.cards,board);local hs=p.fold and"FOLDED"or hn
+cv:text(ix+iw-tw(hs,f_sm)-pin,iy+(s2 and 8 or 3),hs,p.fold and C.bad or K_GLD,f_sm)
+cv:text(ix+pin,iy+I((ih-lh_xs)/2)+1,(state=="player")and fmt("RAISE TARGET: $%d  [Up/Down]",I(r_to))or(p.st~=""and("STATUS: "..p.st)or"WAITING FOR TABLE..."),C.accent,f_xs)
+cv:text(ix+pin,iy+ih-lh_xs-(s2 and 6 or 1),"[F]Fold  [C]Call/Chk  [R]Raise  [A]All-In",C.sub,f_xs)
+end
+end
+local by=H-bot_h;cv:rect(0,by,W,bot_h,K_BAR,true);cv:line(0,by,W,by,0x1F2933,1)
+local nb=#btns
+if nb>0 then
+local g=(not s2 and nb>=5)and 3 or gap
+local pv,bf,br,mp=s2 and 8 or 3,s2 and f_md or f_sm,s2 and 8 or 4,s2 and 20 or 8
+local avw,bh,blh=W-g*(nb+1),bot_h-pv*2,th(bf)
+local wts,tws,tot,wi={},{},0,1
+for i=1,nb do
+local b=btns[i];local t_w=tw(b.label,bf);local wt=max(b.w or 60,t_w+mp)
+wts[i],tws[i],tot=wt,t_w,tot+wt;if wt>wts[wi]then wi=i end
+end
+local bws,uw={},0
+for i=1,nb do bws[i]=I((avw*wts[i])/tot);uw=uw+bws[i]end
+if uw<avw then bws[wi]=bws[wi]+(avw-uw)end
+local cbx=g
+for i=1,nb do
+local b,bw=btns[i],bws[i];local bx,bby=cbx,by+pv;cbx=cbx+bw+g
+b.x,b.y,b.bw,b.bh=bx,bby,bw,bh
+local bg=not b.enabled and K_BDS or(b.primary and K_BAC or K_BTN)
+local fg=b.enabled and((i==f_idx)and(b.primary and K_GLD or C.accent)or 0x2B3642)or nil
+box(bx,bby,bw,bh,bg,fg,br);local lbl,t_w=b.label,tws[i]
+if t_w>bw-6 and lbl:find(" %[")then lbl=lbl:gsub(" %[.*%]","");t_w=tw(lbl,bf)end
+cv:text(bx+max(2,I((bw-t_w)/2)),bby+max(1,I((bh-blh)/2)),lbl,not b.enabled and K_DIM or(b.primary and K_GLD or C.text),bf)
+end
+end
+end
+local function cyc_foc(d)
+local n=#btns;if n==0 then return end
+for _=1,n do f_idx=((f_idx-1+d)%n)+1;if btns[f_idx]and btns[f_idx].enabled then break end end
+draw_screen()
+end
+function app.on_open(w,h)
+local brd=(sys.board and sys.board())or{}
+W=I((w and w>0)and w or((brd.w and brd.w>0)and brd.w or 320))
+H=I((h and h>0)and h or((brd.h and brd.h>0)and brd.h or 208))
+layout()
+seats[1].stack=I(tonumber(store.get("he_bank",S0))or S0)
+best_b=I(tonumber(store.get("he_best",S0))or S0)
+h_won=I(tonumber(store.get("he_wins",0))or 0)
+h_play=I(tonumber(store.get("he_hands",0))or 0)
+b_idx=I(clp(tonumber(store.get("he_blind",1))or 1,1,#BLINDS))
+local _,bb=blinds();if seats[1].stack<bb then seats[1].stack=S0 end
+for i=2,4 do seats[i].stack=S0 end
+cv=make_cv(W,H);build_deck();state="title";rebuild_btns();draw_screen()
+end
+function app.on_tick()
+if state~="ai"then timer.stop();return end
+local act,can=cnt_pl();if act<=1 then resolve(true);return end
+if can<2 then next_street();return end
+local p=seats[trn_s]
+if p and not p.hum and not p.fold and not p.all then ai_go(trn_s)else adv_turn()end
+end
 function app.on_input(ev)
-  if not ev then return end
-
-  if ev.type == "down" then
-    local ex, ey = tonumber(ev.x) or 0, tonumber(ev.y) or 0
-    for i = 1, #active_btns do
-      local b = active_btns[i]
-      if b.x and ex >= b.x and ex <= b.x + b.w and ey >= b.y and ey <= b.y + b.h then
-        if b.enabled and b.fn then
-          focus_idx = i
-          b.fn()
-        end
-        return
-      end
-    end
-    if ey <= L.top_h and ex >= W - I(W * 0.28) then
-      sound_on = not sound_on
-      sys.toast(sound_on and "Sound ON" or "Sound OFF")
-      draw_screen()
-      return
-    end
-    if state == "ai" then
-      app.on_tick(0)
-      return
-    end
-    if (state == "done" or state == "title") and ey > L.top_h + 2 and ey < H - L.bot_h - 2 then
-      start_hand()
-      return
-    end
-
-  elseif ev.type == "swipe" then
-    local _, bb = get_blinds()
-    local d = ev.dir
-    if d == "left" then
-      cycle_focus(-1)
-    elseif d == "right" then
-      cycle_focus(1)
-    elseif d == "up" then
-      if state == "player" then adjust_raise(bb) end
-    elseif d == "down" then
-      if state == "player" then adjust_raise(-bb) end
-    end
-
-  elseif ev.type == "key" then
-    local _, bb = get_blinds()
-    local k = tostring(ev.key or ""):lower()
-    if state == "ai" then
-      app.on_tick(0)
-      return
-    end
-    if k == "left" then
-      cycle_focus(-1)
-    elseif k == "right" or k == "l" then
-      cycle_focus(1)
-    elseif k == "up" or k == "w" or k == "+" or k == "=" then
-      if state == "player" then adjust_raise(bb) end
-    elseif k == "down" or k == "z" or k == "-" then
-      if state == "player" then adjust_raise(-bb) end
-    elseif k == "enter" or k == " " then
-      trigger_focused()
-    elseif k == "m" then
-      sound_on = not sound_on
-      sys.toast(sound_on and "Sound ON" or "Sound OFF")
-      draw_screen()
-    elseif state == "player" then
-      if k == "f" then perform_action(1, "fold")
-      elseif k == "c" then perform_action(1, "call")
-      elseif k == "r" then
-        if seats[1].stack > (cur_bet - seats[1].street_bet) then
-          perform_action(1, "raise", raise_to)
-        end
-      elseif k == "a" then perform_action(1, "allin")
-      end
-    elseif state == "done" or state == "title" then
-      if k == "d" or k == "h" then start_hand()
-      elseif k == "b" then cycle_blinds()
-      elseif k == "n" then reset_table()
-      end
-    end
-  end
+if not ev then return end
+if ev.type=="down"then
+local ex,ey=tonumber(ev.x)or 0,tonumber(ev.y)or 0
+for i=1,#btns do
+local b=btns[i]
+if b.x and ex>=b.x and ex<=b.x+b.bw and ey>=b.y and ey<=b.y+b.bh then
+if b.enabled and b.fn then f_idx=i;b.fn()end;return
 end
-
-function app.on_close()
-  save_stats()
 end
-
+if ey<=top_h and ex>=W-I(W*0.28)then snd=not snd;sys.toast(snd and"Sound ON"or"Sound OFF");draw_screen();return end
+if state=="ai"then app.on_tick(0);return end
+if(state=="done"or state=="title")and ey>top_h+2 and ey<H-bot_h-2 then start_hand();return end
+elseif ev.type=="swipe"then
+local _,bb=blinds();local d=ev.dir
+if d=="left"then cyc_foc(-1)elseif d=="right"then cyc_foc(1)
+elseif d=="up"and state=="player"then adj_r(bb)elseif d=="down"and state=="player"then adj_r(-bb)end
+elseif ev.type=="key"then
+local _,bb=blinds();local k=tostring(ev.key or""):lower()
+if state=="ai"then app.on_tick(0);return end
+if k=="left"then cyc_foc(-1)elseif k=="right"or k=="l"then cyc_foc(1)
+elseif(k=="up"or k=="w"or k=="+"or k=="=")and state=="player"then adj_r(bb)
+elseif(k=="down"or k=="z"or k=="-")and state=="player"then adj_r(-bb)
+elseif k=="enter"or k==" "then local b=btns[f_idx];if b and b.enabled and b.fn then b.fn()end
+elseif k=="m"then snd=not snd;sys.toast(snd and"Sound ON"or"Sound OFF");draw_screen()
+elseif state=="player"then
+if k=="f"then act_pl(1,"fold")elseif k=="c"then act_pl(1,"call")
+elseif k=="r"and seats[1].stack>(c_bet-seats[1].sb)then act_pl(1,"raise",r_to)
+elseif k=="a"then act_pl(1,"allin")end
+elseif state=="done"or state=="title"then
+if k=="d"or k=="h"then start_hand()elseif k=="b"then cyc_bl()elseif k=="n"then rst_tbl()end
+end
+end
+end
+function app.on_close()save_stats()end
 return app

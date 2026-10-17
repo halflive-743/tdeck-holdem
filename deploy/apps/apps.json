@@ -1,0 +1,142 @@
+{
+  "apps": [
+    {
+      "id": "monitor",
+      "name": "RF Monitor",
+      "ver": "1.4",
+      "desc": "RSSI, noise, margin and packet-rate tiles, a filled signal chart and the recently heard packets. Tap a packet for who sent it, its route, margin, size and airtime."
+    },
+    {
+      "id": "airtime",
+      "name": "Airtime",
+      "ver": "1.6",
+      "desc": "How busy the channel is: the live load, average, peak, a filled chart with the duty ceiling and the rx/tx split. Keeps a Home widget with the channel load while it runs."
+    },
+    {
+      "id": "snake",
+      "name": "Snake",
+      "ver": "1.0",
+      "desc": "The classic, in Lua. Swipe to steer."
+    },
+    {
+      "id": "tetris",
+      "name": "Tetris",
+      "ver": "1.0",
+      "desc": "The classic falling-block puzzle. Swipe left/right to move, up to rotate, down to hard-drop. Contributed by samuelcoustet.",
+      "seed": false
+    },
+    {
+      "id": "protreck",
+      "name": "ProTreck",
+      "ver": "1.0",
+      "desc": "Outdoor watch: sunrise/sunset + moon phase (ASTRO), chronometer with laps (CHRONO), countdown timer with alarm (TIMER), altimeter with trend graph (ALTI). Swipe left/right to switch modes. Contributed by samuelcoustet.",
+      "seed": false
+    },
+    {
+      "id": "sdktest",
+      "name": "SDK Test",
+      "ver": "1.7",
+      "desc": "Developer tool. Checks the extended Lua SDK on this board: capabilities, clock, battery, GPS, private file access, audio API, read-only SD listing, crypto against published RFC vectors, channel discovery, and buttons that TRANSMIT test messages.",
+      "requires": "sdk_ext"
+    },
+    {
+      "id": "2048",
+      "name": "2048",
+      "ver": "1.2",
+      "desc": "The classic sliding-tile puzzle. Swipe to move, tap to restart. Keeps your best score. Contributed by pisti87.",
+      "seed": false
+    },
+    {
+      "id": "wardrive",
+      "name": "Wardrive",
+      "ver": "1.2",
+      "desc": "LoRa coverage survey. Probes every 20s and logs each reply with GPS position, altitude and BOTH link directions (how well you heard them, how well they heard you) to a CSV, then plots the run back on the map so you can check coverage before driving it again. Reference app for wada.mesh.discover.",
+      "requires": "sdk_ext"
+    },
+    {
+      "id": "nearby",
+      "name": "Nearby",
+      "ver": "1.0",
+      "desc": "Your contacts on a real map, sorted by distance, with bearing and a live frame counter. Reference app for wada.map, wada.ui.list, wada.geo and app.on_packet.",
+      "requires": "sdk_ext"
+    },
+    {
+      "id": "gpscompass",
+      "name": "GPS Compass",
+      "ver": "1.0",
+      "desc": "Compass rose: magnetometer or GPS course, live fix, bearing to contacts",
+      "seed": false
+    },
+    {
+      "id": "sdscan",
+      "name": "SD Scan",
+      "ver": "1.1",
+      "desc": "Finds and removes Windows malware on the SD card, like the M9 worm.",
+      "requires": "sd",
+      "seed": false
+    },
+    {
+      "id": "tripodometer",
+      "name": "Trip Odometer",
+      "ver": "1.0",
+      "desc": "GPS trip computer: distance, time, speed, altitude. Start/Stop to track, Reset to clear. Saves your trip across restarts. Contributed by samuelcoustet.",
+      "requires": "gps",
+      "seed": false
+    },
+    {
+      "id": "breakout",
+      "name": "Breakout",
+      "ver": "1.0",
+      "desc": "Classic brick-breaker. Swipe left/right to move the paddle, swipe up to launch the ball. Clear all bricks to advance levels. Contributed by samuelcoustet.",
+      "seed": false
+    },
+    {
+      "id": "ping",
+      "name": "Ping",
+      "ver": "1.0",
+      "desc": "Send a mesh DM ping to any contact and measure round-trip time. Includes your GPS position so both sides see distance and bearing. Auto-replies to incoming pings. Contributed by samuelcoustet.",
+      "requires": "sdk_ext"
+    },
+    {
+      "id": "mecp",
+      "name": "MECP",
+      "ver": "1.0",
+      "desc": "Emergency messages in MECP code: pick severity and codes, add people and position, post to a channel. Decodes MECP lines into words. Code table: MECP by xiang-dev-1, CC BY 4.0.",
+      "requires": "sdk_ext",
+      "seed": false
+    },
+    {
+      "id": "music",
+      "name": "Music",
+      "ver": "1.0",
+      "desc": "MP3 and WAV from the SD card's Music folder, shuffle, repeat.",
+      "icon": "music",
+      "requires": "audio",
+      "seed": false
+    },
+    {
+      "id": "blackjack",
+      "name": "Blackjack",
+      "ver": "1.0",
+      "desc": "Casino Blackjack (21) with split, double down, 6-deck shoe, persistent bankroll, and T-Deck/T-Display P4 controls. Contributed by halflive-743.",
+      "icon": "game",
+      "seed": false
+    },
+    {
+      "id": "tictactoe",
+      "name": "Tic-Tac-Toe",
+      "ver": "1.0",
+      "desc": "Tic-Tac-Toe vs HAL (Minimax AI) with 2-Player pass-and-play, T-Deck keyboard numpad/touch controls, and persistent scoreboard.",
+      "icon": "game",
+      "seed": false
+    },
+    {
+      "id": "holdem",
+      "name": "Texas Hold'em",
+      "ver": "1.1",
+      "desc": "No-Limit Texas Hold'em Poker (4-Max vs 3 AI bots) with blinds, side pots, live hand evaluator, and auto-scaling UI for T-Deck & T-Display P4 (AMOLED/LCD).",
+      "icon": "game",
+      "seed": false
+    }
+  ]
+}
