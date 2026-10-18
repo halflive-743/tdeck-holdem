@@ -3,31 +3,33 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LilyGo T-Deck · WADAMESH Texas Hold'em Simulator</title>
+<title>WADAMESH Texas Hold'em · Multi-Device Hardware Simulator</title>
 <style>
   :root {
     --bg: #0b0e12;
     --shell: #1b2026;
     --shell-edge: #2c343e;
     --teal: #15b6a6;
+    --amber: #fbbf24;
+    --emerald: #10b981;
     --gold: #f2c14e;
     --text: #e6e9ed;
     --sub: #7a7f87;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
   body {
-    background: radial-gradient(circle at 50% 20%, #162229 0%, #090c10 75%);
+    background: radial-gradient(circle at 50% 20%, #16242f 0%, #090c10 75%);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 24px 16px;
+    padding: 16px;
   }
   header {
     text-align: center;
-    margin-bottom: 18px;
+    margin-bottom: 12px;
   }
   header h1 {
     font-size: 1.35rem;
@@ -37,19 +39,51 @@
   header h1 span { color: var(--teal); }
   header p {
     color: var(--sub);
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     margin-top: 4px;
   }
+
+  /* Interactive Device Switcher Bar */
+  .device-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    max-width: 900px;
+  }
+  .dev-pill {
+    background: #161c24;
+    border: 1px solid #283344;
+    border-radius: 99px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-family: ui-monospace, monospace;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .dev-pill:hover {
+    border-color: var(--teal);
+    color: #fff;
+  }
+  .dev-pill.active {
+    background: #083344;
+    border-color: var(--teal);
+    color: var(--teal);
+    font-weight: 700;
+  }
+
   .tdeck-device {
-    width: 368px;
     background: linear-gradient(180deg, #22272e 0%, #171b20 100%);
     border: 2px solid var(--shell-edge);
     border-radius: 26px;
-    padding: 18px 22px 22px;
+    padding: 16px 20px 20px;
     box-shadow: 0 28px 70px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.08);
     display: flex;
     flex-direction: column;
     align-items: center;
+    transition: width 0.2s;
   }
   .bezel-top {
     width: 100%;
@@ -58,233 +92,326 @@
     align-items: center;
     margin-bottom: 8px;
     padding: 0 4px;
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 0.68rem;
-    color: #6c7682;
-    letter-spacing: 0.08em;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: #8b949e;
+    font-family: ui-monospace, monospace;
+    font-weight: 700;
   }
   .screen-wrap {
-    width: 320px;
-    height: 240px;
     background: #000;
     border-radius: 8px;
     overflow: hidden;
-    border: 2px solid #0a0c0e;
-    box-shadow: inset 0 0 8px rgba(0,0,0,0.9);
+    box-shadow: inset 0 0 12px rgba(0,0,0,0.9), 0 0 0 2px #0f1216;
+    position: relative;
+    cursor: crosshair;
     display: flex;
     flex-direction: column;
-    position: relative;
   }
   .wada-bar {
     height: 32px;
-    background: #080b0e;
-    border-bottom: 1px solid #192129;
+    background: #0d1117;
+    border-bottom: 1px solid #21262d;
     display: flex;
     align-items: center;
-    padding: 0 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
     justify-content: space-between;
+    padding: 0 10px;
+    font-size: 11px;
+    color: var(--text);
+    font-family: ui-monospace, monospace;
+    flex-shrink: 0;
   }
   .wada-bar .back {
     color: var(--teal);
-    font-family: monospace;
+    font-weight: 700;
   }
   .wada-bar .sys {
     color: var(--sub);
-    font-size: 11px;
-    font-family: monospace;
+    font-size: 10px;
   }
-  canvas#screen {
-    width: 320px;
-    height: 208px;
+  #screen {
     display: block;
-    cursor: pointer;
     image-rendering: pixelated;
   }
-  .toast {
+
+  .nav-zone {
+    width: 100%;
+    margin-top: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 10px;
+  }
+  .trackball-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .trackball-label {
+    font-size: 9px;
+    font-weight: 700;
+    color: #8b949e;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .trackball {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #586069, #24292e 60%, #0d1117);
+    border: 2px solid #30363d;
+    box-shadow: inset 0 2px 4px rgba(255,255,255,0.2), 0 4px 8px rgba(0,0,0,0.6);
+    cursor: pointer;
+    position: relative;
+  }
+  .trackball:active { transform: scale(0.94); }
+  .trackball::after {
+    content: '';
     position: absolute;
-    bottom: 36px;
+    top: 50%; left: 50%;
+    width: 8px; height: 8px;
+    background: rgba(255,255,255,0.3);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  .dpad-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 26px);
+    grid-template-rows: repeat(3, 26px);
+    gap: 3px;
+  }
+  .dbtn {
+    background: #1c2128;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    color: #c9d1d9;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 2px 0 #0d1117;
+  }
+  .dbtn:active { transform: translateY(1px); background: #2d333b; }
+  .dbtn.up { grid-column: 2; grid-row: 1; }
+  .dbtn.left { grid-column: 1; grid-row: 2; }
+  .dbtn.center { grid-column: 2; grid-row: 2; font-size: 8px; font-weight: 700; color: var(--teal); }
+  .dbtn.right { grid-column: 3; grid-row: 2; }
+  .dbtn.down { grid-column: 2; grid-row: 3; }
+
+  .keyboard-deck {
+    width: 100%;
+    margin-top: 12px;
+    background: #13171d;
+    border: 1px solid #28303a;
+    border-radius: 12px;
+    padding: 8px 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .key-row {
+    display: flex;
+    justify-content: center;
+    gap: 3px;
+  }
+  .key {
+    background: linear-gradient(180deg, #242b35 0%, #171c23 100%);
+    border: 1px solid #353f4d;
+    border-radius: 4px;
+    color: #e6edf3;
+    font-size: 9px;
+    font-family: ui-monospace, monospace;
+    font-weight: 600;
+    min-width: 25px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 1.5px 0 #0a0d11;
+  }
+  .key:hover { border-color: var(--teal); }
+  .key:active, .key.pressed {
+    transform: translateY(1px);
+    border-color: var(--teal);
+    color: var(--teal);
+  }
+  .key.wide { min-width: 38px; }
+  .key.space { min-width: 88px; }
+  .key.accent { color: var(--gold); }
+
+  .instructions {
+    margin-top: 16px;
+    max-width: 640px;
+    background: #11161f;
+    border: 1px solid #202936;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 11px;
+    color: #8b949e;
+    line-height: 1.6;
+  }
+  .instructions strong { color: var(--text); }
+  .instructions kbd {
+    background: #1c222b;
+    border: 1px solid #303947;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 10px;
+    color: var(--teal);
+    font-family: ui-monospace, monospace;
+  }
+  .toast-banner {
+    position: absolute;
+    top: 38px;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(21, 24, 27, 0.95);
+    background: rgba(13, 17, 23, 0.94);
     border: 1px solid var(--teal);
-    color: var(--text);
+    color: var(--teal);
     font-size: 11px;
+    font-family: ui-monospace, monospace;
     padding: 4px 12px;
-    border-radius: 99px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.6);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.2s;
-    white-space: nowrap;
+    z-index: 99;
   }
-  .toast.show { opacity: 1; }
-
-  .mid-strip {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    margin: 12px 0 10px;
-  }
-  .trackball-pad {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .tb-btn {
-    background: #252b33;
-    border: 1px solid #363f4a;
-    color: #9aa5b1;
-    border-radius: 6px;
-    width: 26px;
-    height: 24px;
-    font-size: 10px;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-  }
-  .tb-btn:hover { border-color: var(--teal); color: #fff; }
-  .trackball {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, #55606e, #181c20 75%);
-    border: 2px solid #323b46;
-    cursor: pointer;
-    box-shadow: inset 0 2px 4px rgba(255,255,255,0.15), 0 2px 5px rgba(0,0,0,0.6);
-  }
-  .trackball:active { transform: scale(0.95); }
-
-  .kbd {
-    width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    background: #121519;
-    padding: 8px;
-    border-radius: 12px;
-    border: 1px solid #252b32;
-  }
-  .krow {
-    display: flex;
-    gap: 4px;
-    justify-content: center;
-  }
-  .key {
-    flex: 1;
-    height: 24px;
-    background: #232931;
-    border: 1px solid #323a45;
-    border-bottom: 2px solid #0e1114;
-    border-radius: 5px;
-    color: #d1d7de;
-    font-family: ui-monospace, monospace;
-    font-size: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    display: grid;
-    place-items: center;
-  }
-  .key:hover { background: #2d3540; border-color: var(--teal); }
-  .key:active { transform: translateY(1px); }
-  .key.hi { color: var(--gold); border-color: #5c4b23; }
-  .key.wide { flex: 2.4; }
 </style>
 </head>
 <body>
 
 <header>
-  <h1>WADA<span>MESH</span> · LilyGo T-Deck Texas Hold'em</h1>
-  <p>Tap screen buttons, use the T-Deck keypad, or press keys (<b>F</b> Fold, <b>C</b> Check/Call, <b>R</b> Raise, <b>A</b> All-In, <b>D</b> Deal)</p>
+  <h1>WADAMESH <span>TEXAS HOLD'EM</span></h1>
+  <p>Multi-Device Hardware & Audio Simulator (Lua 5.4 · v1.1)</p>
 </header>
 
-<div class="tdeck-device">
+<div class="device-bar">
+  <div class="dev-pill active" onclick="switchDevice('tdeck')">LilyGo T-Deck (320×208)</div>
+  <div class="dev-pill" onclick="switchDevice('heltec')">Heltec V4 (240×244)</div>
+  <div class="dev-pill" onclick="switchDevice('pager')">T-LoRa Pager (480×178)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_land')">T-Display P4 LCD Land (1168×474)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_port')">T-Display P4 LCD Port (540×1102)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_amoled_land')">T-Display P4 AMOLED Land (1232×502)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_amoled_port')">T-Display P4 AMOLED Port (568×1166)</div>
+</div>
+
+<div class="tdeck-device" id="device-shell">
   <div class="bezel-top">
-    <span>LILYGO® T-DECK</span>
-    <span>320×240 IPS · LUA 5.4</span>
+    <span id="bezel-name">LILYGO T-DECK</span>
+    <span id="bezel-spec">320×208 · MESHCORE</span>
   </div>
 
-  <div class="screen-wrap">
+  <div class="screen-wrap" id="screen-wrap">
     <div class="wada-bar">
-      <span class="back">&lt; Texas Hold'em</span>
-      <span class="sys">LoRa 915 · 88%</span>
+      <span class="back">&lt; Apps</span>
+      <span style="font-weight:700;">Texas Hold'em v1.1</span>
+      <span class="sys">CH 0 · 100%</span>
     </div>
     <canvas id="screen" width="320" height="208"></canvas>
-    <div id="toast" class="toast"></div>
+    <div id="toast" class="toast-banner">Toast</div>
   </div>
 
-  <div class="mid-strip">
-    <div class="trackball-pad">
-      <button class="tb-btn" title="Swipe Left" onclick="sendSwipe('left')">◀</button>
-      <button class="tb-btn" title="Swipe Up (+Raise)" onclick="sendSwipe('up')">▲</button>
-      <div class="trackball" title="Click Trackball (Enter)" onclick="sendKey('enter')"></div>
-      <button class="tb-btn" title="Swipe Down (-Raise)" onclick="sendSwipe('down')">▼</button>
-      <button class="tb-btn" title="Swipe Right" onclick="sendSwipe('right')">▶</button>
+  <div class="nav-zone" id="nav-zone">
+    <div class="trackball-wrap">
+      <div class="trackball" id="trackball" title="Trackball: Roll buttons, click to select" onclick="sendKey('enter')"></div>
+      <span class="trackball-label">Trackball</span>
+    </div>
+    <div class="dpad-grid">
+      <button class="dbtn up" onclick="sendSwipe('up')">▲</button>
+      <button class="dbtn left" onclick="sendSwipe('left')">◀</button>
+      <button class="dbtn center" onclick="sendKey('enter')">OK</button>
+      <button class="dbtn right" onclick="sendSwipe('right')">▶</button>
+      <button class="dbtn down" onclick="sendSwipe('down')">▼</button>
     </div>
   </div>
 
-  <div class="kbd">
-    <div class="krow">
-      <div class="key" onclick="sendKey('q')">Q</div>
-      <div class="key hi" title="+Raise" onclick="sendKey('w')">W</div>
-      <div class="key" onclick="sendKey('e')">E</div>
-      <div class="key hi" title="Bet / Raise" onclick="sendKey('r')">R</div>
-      <div class="key" onclick="sendKey('t')">T</div>
-      <div class="key" onclick="sendKey('y')">Y</div>
-      <div class="key" onclick="sendKey('u')">U</div>
-      <div class="key" onclick="sendKey('i')">I</div>
-      <div class="key" onclick="sendKey('o')">O</div>
-      <div class="key" onclick="sendKey('p')">P</div>
+  <div class="keyboard-deck" id="device-kbd">
+    <div class="key-row">
+      <div class="key" data-k="1">1</div><div class="key" data-k="2">2</div><div class="key" data-k="3">3</div><div class="key" data-k="4">4</div><div class="key" data-k="5">5</div>
+      <div class="key" data-k="6">6</div><div class="key" data-k="7">7</div><div class="key" data-k="8">8</div><div class="key" data-k="9">9</div><div class="key" data-k="0">0</div>
     </div>
-    <div class="krow">
-      <div class="key hi" title="All-In" onclick="sendKey('a')">A</div>
-      <div class="key" onclick="sendKey('s')">S</div>
-      <div class="key hi" title="Deal Hand" onclick="sendKey('d')">D</div>
-      <div class="key hi" title="Fold" onclick="sendKey('f')">F</div>
-      <div class="key" onclick="sendKey('g')">G</div>
-      <div class="key hi" title="Deal Hand" onclick="sendKey('h')">H</div>
-      <div class="key" onclick="sendKey('j')">J</div>
-      <div class="key" onclick="sendKey('k')">K</div>
-      <div class="key" onclick="sendKey('l')">L</div>
-      <div class="key wide hi" onclick="sendKey('enter')">ENTER</div>
+    <div class="key-row">
+      <div class="key" data-k="q">Q</div><div class="key accent" data-k="w" title="+Raise">W</div><div class="key" data-k="e">E</div><div class="key accent" data-k="r" title="Raise">R</div><div class="key" data-k="t">T</div>
+      <div class="key" data-k="y">Y</div><div class="key" data-k="u">U</div><div class="key" data-k="i">I</div><div class="key" data-k="o">O</div><div class="key" data-k="p">P</div>
     </div>
-    <div class="krow">
-      <div class="key hi" title="-Raise" onclick="sendKey('z')">Z</div>
-      <div class="key" onclick="sendKey('x')">X</div>
-      <div class="key hi" title="Check / Call" onclick="sendKey('c')">C</div>
-      <div class="key" onclick="sendKey('v')">V</div>
-      <div class="key hi" title="Cycle Blinds" onclick="sendKey('b')">B</div>
-      <div class="key wide" onclick="sendKey(' ')">SPACE</div>
-      <div class="key hi" title="New Table" onclick="sendKey('n')">N</div>
-      <div class="key hi" title="Mute" onclick="sendKey('m')">M</div>
+    <div class="key-row">
+      <div class="key accent" data-k="a" title="All-In">A</div><div class="key" data-k="s">S</div><div class="key accent" data-k="d" title="Deal">D</div><div class="key accent" data-k="f" title="Fold">F</div><div class="key" data-k="g">G</div>
+      <div class="key accent" data-k="h" title="Deal">H</div><div class="key" data-k="j">J</div><div class="key" data-k="k">K</div><div class="key" data-k="l">L</div><div class="key wide accent" data-k="enter">ENT</div>
+    </div>
+    <div class="key-row">
+      <div class="key wide" data-k="escape">ESC</div><div class="key accent" data-k="z" title="-Raise">Z</div><div class="key" data-k="x">X</div><div class="key accent" data-k="c" title="Check/Call">C</div><div class="key" data-k="v">V</div>
+      <div class="key accent" data-k="b" title="Blinds">B</div><div class="key accent" data-k="n" title="New Tbl">N</div><div class="key accent" data-k="m" title="Mute">M</div><div class="key space" data-k=" ">SPACE</div>
     </div>
   </div>
 </div>
 
+<div class="instructions">
+  <strong>🕹️ Controls Reference:</strong><br>
+  • <strong>Touchscreen</strong>: Tap any bottom action button (FOLD, CHECK/CALL, RAISE, +BB, ALL-IN), tap table to deal next hand, or tap top-right to toggle audio.<br>
+  • <kbd>F</kbd>: <strong>Fold</strong> &nbsp;|&nbsp; <kbd>C</kbd>: <strong>Check / Call</strong> &nbsp;|&nbsp; <kbd>R</kbd>: <strong>Bet / Raise</strong> &nbsp;|&nbsp; <kbd>A</kbd>: <strong>All-In</strong><br>
+  • <kbd>W</kbd> / <kbd>Z</kbd> or <kbd>+</kbd> / <kbd>-</kbd> / D-Pad Up/Down: Adjust raise target by 1 Big Blind.<br>
+  • <kbd>D</kbd> or <kbd>H</kbd>: <strong>Deal Hand</strong> &nbsp;|&nbsp; <kbd>B</kbd>: Cycle Blinds ($5/$10, $10/$20, $25/$50) &nbsp;|&nbsp; <kbd>N</kbd>: New Table ($500 buy-in)<br>
+  • <kbd>Enter</kbd> / <kbd>Space</kbd> / Trackball Click: Activate highlighted button (or skip AI delay).<br>
+  • <kbd>M</kbd>: Mute/Unmute sound synthesizer.
+</div>
+
 <script>
-// Exact mirror of holdem.lua on WadaMesh wada.ui.canvas
 const canvas = document.getElementById('screen');
 const ctx = canvas.getContext('2d');
-const W = 320, H = 208;
+const toastEl = document.getElementById('toast');
 
+const DEVICES = {
+  tdeck:          { name: "LilyGo T-Deck",              spec: "320×208 · MESHCORE",     w: 320,  h: 208,  shellW: 368,  hasKbd: true  },
+  heltec:         { name: "Heltec V4",                 spec: "240×244 · TFT PORTRAIT", w: 240,  h: 244,  shellW: 288,  hasKbd: false },
+  pager:          { name: "LilyGo T-LoRa Pager",        spec: "480×178 · KEYPAD WIDE",   w: 480,  h: 178,  shellW: 528,  hasKbd: true  },
+  p4_land:        { name: "T-Display P4 LCD (Land)",    spec: "1168×474 · HI8561 LCD",   w: 1168, h: 474,  shellW: 1210, hasKbd: false },
+  p4_port:        { name: "T-Display P4 LCD (Port)",    spec: "540×1102 · HI8561 LCD",   w: 540,  h: 1102, shellW: 580,  hasKbd: false },
+  p4_amoled_land: { name: "T-Display P4 AMOLED (Land)", spec: "1232×502 · RM69A10 AMOLED",w: 1232, h: 502,  shellW: 1274, hasKbd: false },
+  p4_amoled_port: { name: "T-Display P4 AMOLED (Port)", spec: "568×1166 · RM69A10 AMOLED",w: 568,  h: 1166, shellW: 608,  hasKbd: false }
+};
+
+let currentDev = DEVICES.tdeck;
+let W = 320, H = 208;
+let dname = "T-Deck", s2 = false, port = false;
+let f_xs = 10, f_sm = 11, f_md = 12, f_lg = 14, f_xl = 16, f_rk = 12;
+let lh_xs = 14, lh_sm = 15, lh_md = 16, lh_lg = 18, lh_xl = 20;
+let top_h = 20, bot_h = 30, pad = 6, gap = 4, tbl_h = 158;
+let cc_w = 37, cc_h = 48, cc_g = 5;
+let p_cw = 37, p_ch = 48, p_sm = 3, p_lg = 5;
+
+// Color Palette matching holdem.lua
 const C = {
   accent: 0x15B6A6, text: 0xE6E9ED, sub: 0x7A7F87,
   bg: 0x000000, panel: 0x15181B, bad: 0xD7574E, good: 0x53C06B
 };
 
+const COL_FELT = 0x0B2B1E, COL_FELT_DARK = 0x082016, COL_FELT_LINE = 0x164A35;
+const COL_TOPBAR = 0x0E1318, COL_BOTBAR = 0x0E1318, COL_POD_BG = 0x101820, COL_POD_FOLD = 0x0A1214;
+const COL_CARD_BG = 0xF5F7FA, COL_CARD_SHAD = 0x06150E, COL_CARD_BACK = 0x1B4F8A, COL_CARD_TRIM = 0x4A8FE7;
+const COL_RED = 0xD9383A, COL_BLACK = 0x181C24, COL_GOLD = 0xF2C14E;
+const COL_BTN = 0x1A222B, COL_BTN_ACT = 0x1E3A3A, COL_BTN_DIS = 0x11161C, COL_TEXT_DIM = 0x525A65;
+
+const I = x => Math.floor(Number(x) || 0);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
 function hexCss(c) {
   return '#' + (c & 0xFFFFFF).toString(16).padStart(6, '0');
 }
 
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.add('show');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('show'), 1600);
+function text_w(str, sz = 12) {
+  ctx.font = `600 ${sz}px "JetBrains Mono", ui-monospace, Consolas, monospace`;
+  return Math.floor(ctx.measureText(String(str || "")).width);
+}
+
+function text_h(sz = 12) {
+  return sz + 4;
 }
 
 const cv = {
@@ -321,17 +448,49 @@ const cv = {
   }
 };
 
-function text_w(str, sz = 12) {
-  ctx.font = `600 ${sz}px "JetBrains Mono", ui-monospace, Consolas, monospace`;
-  return Math.floor(ctx.measureText(String(str)).width);
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.style.opacity = '1';
+  clearTimeout(toastEl._t);
+  toastEl._t = setTimeout(() => toastEl.style.opacity = '0', 1600);
 }
 
-const COL_FELT = 0x0B2B1E, COL_FELT_DARK = 0x082016, COL_FELT_LINE = 0x164A35;
-const COL_TOPBAR = 0x0E1318, COL_BOTBAR = 0x0E1318, COL_POD_BG = 0x101820, COL_POD_FOLD = 0x0A1214;
-const COL_CARD_BG = 0xF5F7FA, COL_CARD_SHAD = 0x06150E, COL_CARD_BACK = 0x1B4F8A, COL_CARD_TRIM = 0x4A8FE7;
-const COL_RED = 0xD9383A, COL_BLACK = 0x181C24, COL_GOLD = 0xF2C14E;
-const COL_BTN = 0x1A222B, COL_BTN_ACT = 0x1E3A3A, COL_BTN_DIS = 0x11161C, COL_TEXT_DIM = 0x525A65;
+let audioCtx = null;
+let sound_on = true;
+function sfx(kind = "beep") {
+  if (!sound_on) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const now = audioCtx.currentTime;
+    let freq = 480, dur = 0.05, type = 'sine';
+    if (kind === 'win') {
+      type = 'triangle';
+      dur = 0.28;
+      osc.frequency.setValueAtTime(523.25, now);
+      osc.frequency.setValueAtTime(659.25, now + 0.09);
+      osc.frequency.setValueAtTime(783.99, now + 0.18);
+    } else if (kind === 'chip') {
+      freq = 880; dur = 0.04;
+    } else if (kind === 'card') {
+      freq = 380; dur = 0.05;
+    } else if (kind === 'fold') {
+      freq = 240; dur = 0.09; type = 'sawtooth';
+    }
+    osc.type = type;
+    if (kind !== 'win') osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + dur);
+  } catch(e) {}
+}
 
+// Game State
 const START_STACK = 500;
 const BLIND_LEVELS = [{ sb: 5, bb: 10 }, { sb: 10, bb: 20 }, { sb: 25, bb: 50 }];
 let blind_idx = 0;
@@ -343,7 +502,7 @@ const HAND_NAMES = [
 ];
 const STREET_NAMES = ["PRE-FLOP", "FLOP", "TURN", "RIVER", "SHOWDOWN"];
 
-let best_bank = START_STACK, hands_won = 0, hands_played = 0, sound_on = true;
+let best_bank = START_STACK, hands_won = 0, hands_played = 0;
 let state = "title", street = 0, deck = [], board = [], pot = 0, cur_bet = 0, min_raise = 10, raise_to = 20;
 let dealer_seat = 0, turn_seat = 0, show_all_cards = false;
 let banner_title = "", banner_sub = "", banner_col = C.accent;
@@ -356,8 +515,6 @@ const seats = [
   { name: "DUKE",  is_human: false, style: "lag",   stack: START_STACK, cards: [], street_bet: 0, total_bet: 0, folded: false, all_in: false, acted: false, status: "", role: "" },
 ];
 
-const I = x => Math.floor(Number(x) || 0);
-const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const get_blinds = () => BLIND_LEVELS[blind_idx];
 const pval = r => r === 1 ? 14 : r;
 
@@ -450,18 +607,28 @@ function eval_best_hand(hole, comm) {
     let k1 = 0, k2 = 0;
     for (let v = 14; v >= 2; v--) {
       if (v !== trips[0] && rcnt[v] > 0) {
-        if (!k1) k1 = v; else if (!k2) { k2 = v; break; }
+        if (!k1) k1 = v;
+        else if (!k2) { k2 = v; break; }
       }
     }
     return [pack(3, trips[0], k1, k2), 3, HAND_NAMES[3]];
   }
   if (pairs.length >= 2) {
-    let k1 = 0;
-    for (let v = 14; v >= 2; v--) if (v !== pairs[0] && v !== pairs[1] && rcnt[v] > 0) { k1 = v; break; }
-    return [pack(2, pairs[0], pairs[1], k1), 2, HAND_NAMES[2]];
+    let kicker = 0;
+    for (let v = 14; v >= 2; v--) {
+      if (v !== pairs[0] && v !== pairs[1] && rcnt[v] > 0) { kicker = v; break; }
+    }
+    return [pack(2, pairs[0], pairs[1], kicker), 2, HAND_NAMES[2]];
   }
   if (pairs.length === 1) {
-    return [pack(1, pairs[0], singles[0], singles[1], singles[2]), 1, HAND_NAMES[1]];
+    const kickers = [];
+    for (let v = 14; v >= 2; v--) {
+      if (v !== pairs[0] && rcnt[v] > 0) {
+        kickers.push(v);
+        if (kickers.length === 3) break;
+      }
+    }
+    return [pack(1, pairs[0], kickers[0], kickers[1], kickers[2]), 1, HAND_NAMES[1]];
   }
   return [pack(0, singles[0], singles[1], singles[2], singles[3], singles[4]), 0, HAND_NAMES[0]];
 }
@@ -477,46 +644,47 @@ function count_players() {
   return [active, can_act];
 }
 
-function post_chips(idx, amount) {
-  const p = seats[idx];
-  const actual = I(Math.min(amount, p.stack));
-  p.stack = I(p.stack - actual);
-  p.street_bet = I(p.street_bet + actual);
-  p.total_bet = I(p.total_bet + actual);
-  pot = I(pot + actual);
-  if (p.stack <= 0) { p.stack = 0; p.all_in = true; }
-  return actual;
-}
-
 function sync_raise_bounds() {
-  const { bb } = get_blinds();
   const p = seats[0];
-  const max_total = I(p.street_bet + p.stack);
-  let min_total = cur_bet === 0 ? bb : I(cur_bet + Math.max(bb, min_raise));
-  if (min_total > max_total) min_total = max_total;
-  raise_to = I(clamp(raise_to, min_total, max_total));
+  const to_call = I(cur_bet - p.street_bet);
+  const min_target = I(cur_bet + Math.max(get_blinds().bb, min_raise));
+  const max_target = I(p.street_bet + p.stack);
+  raise_to = clamp(raise_to, min_target, max_target);
 }
 
-function perform_action(idx, kind, target_bet) {
+function post_chips(idx, amt) {
   const p = seats[idx];
-  const { bb } = get_blinds();
+  const act = Math.min(p.stack, amt);
+  p.stack = I(p.stack - act);
+  p.street_bet = I(p.street_bet + act);
+  p.total_bet = I(p.total_bet + act);
+  pot = I(pot + act);
+  if (p.stack === 0) p.all_in = true;
+  return act;
+}
+
+function perform_action(idx, action, param) {
+  const p = seats[idx];
   p.acted = true;
 
-  if (kind === "fold") {
+  if (action === "fold") {
     p.folded = true;
     p.status = "FOLD";
-  } else if (kind === "call") {
-    const need = I(cur_bet - p.street_bet);
-    if (need <= 0) p.status = "CHECK";
-    else {
-      post_chips(idx, need);
-      p.status = p.all_in ? "ALL-IN" : `CALL $${I(p.street_bet)}`;
+    sfx('fold');
+  } else if (action === "call") {
+    const to_call = I(cur_bet - p.street_bet);
+    if (to_call <= 0) {
+      p.status = "CHECK";
+      sfx('beep');
+    } else {
+      post_chips(idx, to_call);
+      p.status = p.all_in ? "ALL-IN" : `CALL $${to_call}`;
+      sfx('chip');
     }
-  } else if (kind === "raise" || kind === "allin") {
-    const max_tot = I(p.street_bet + p.stack);
-    const des_tot = kind === "allin" ? max_tot : I(clamp(target_bet || raise_to, cur_bet + bb, max_tot));
-    const added = I(des_tot - p.street_bet);
-    if (added > 0) post_chips(idx, added);
+  } else if (action === "raise" || action === "allin") {
+    const target = action === "allin" ? I(p.street_bet + p.stack) : I(param);
+    const added = target - p.street_bet;
+    post_chips(idx, added);
     if (p.street_bet > cur_bet) {
       const diff = I(p.street_bet - cur_bet);
       if (diff > min_raise) min_raise = diff;
@@ -526,6 +694,7 @@ function perform_action(idx, kind, target_bet) {
       }
     }
     p.status = p.all_in ? `ALL-IN $${I(p.street_bet)}` : (cur_bet === added ? `BET $${I(p.street_bet)}` : `RAISE $${I(p.street_bet)}`);
+    sfx('chip');
   }
 
   if (count_players()[0] <= 1) { resolve_hand(true); return; }
@@ -609,9 +778,9 @@ function next_street_or_showdown() {
   cur_bet = 0;
   min_raise = get_blinds().bb;
 
-  if (street === 0) { street = 1; board.push(draw_card(), draw_card(), draw_card()); }
-  else if (street === 1) { street = 2; board.push(draw_card()); }
-  else if (street === 2) { street = 3; board.push(draw_card()); }
+  if (street === 0) { street = 1; board.push(draw_card(), draw_card(), draw_card()); sfx('card'); }
+  else if (street === 1) { street = 2; board.push(draw_card()); sfx('card'); }
+  else if (street === 2) { street = 3; board.push(draw_card()); sfx('card'); }
   else { resolve_hand(false); return; }
 
   const [, can_act] = count_players();
@@ -642,6 +811,7 @@ function resolve_hand(by_fold) {
       banner_title = "YOU WIN POT!";
       banner_sub = `+$${pot} (Opponents Folded)`;
       banner_col = C.good;
+      sfx('win');
     } else {
       banner_title = `${seats[w].name} WINS`;
       banner_sub = `Pot $${pot} (Folded)`;
@@ -661,43 +831,43 @@ function resolve_hand(by_fold) {
 
   for (let i = 0; i < 4; i++) {
     if (!seats[i].folded) {
-      const [sc, , nm] = eval_best_hand(seats[i].cards, board);
-      scores[i] = sc;
-      hnames[i] = nm;
-      seats[i].status = nm;
-      if (sc > best_overall_score) { best_overall_score = sc; best_overall_winner = i; }
+      const [score, , hname] = eval_best_hand(seats[i].cards, board);
+      scores[i] = score;
+      hnames[i] = hname;
+      if (score > best_overall_score) {
+        best_overall_score = score;
+        best_overall_winner = i;
+      }
     }
   }
 
-  const rem = seats.map(s => s.total_bet);
+  const levels = [...new Set(seats.map(p => p.total_bet).filter(v => v > 0))].sort((a, b) => a - b);
+  let covered = 0;
   const won_amt = [0, 0, 0, 0];
 
-  while (true) {
-    let min_lvl = 999999;
-    for (let i = 0; i < 4; i++) if (!seats[i].folded && rem[i] > 0 && rem[i] < min_lvl) min_lvl = rem[i];
-    if (min_lvl === 999999) break;
-
-    let slice_pot = 0;
-    const elig = [];
+  for (const lvl of levels) {
+    const chunk = lvl - covered;
+    if (chunk <= 0) continue;
+    let side_pot = 0;
+    const contenders = [];
     for (let i = 0; i < 4; i++) {
-      const take = Math.min(rem[i], min_lvl);
-      if (take > 0) { rem[i] -= take; slice_pot += take; }
-      if (!seats[i].folded && take === min_lvl) elig.push(i);
+      if (seats[i].total_bet >= lvl) side_pot += chunk;
+      else if (seats[i].total_bet > covered) side_pot += (seats[i].total_bet - covered);
+      if (!seats[i].folded && seats[i].total_bet >= lvl) contenders.push(i);
     }
-    if (slice_pot > 0 && elig.length) {
-      const max_sc = Math.max(...elig.map(idx => scores[idx]));
-      const winners = elig.filter(idx => scores[idx] === max_sc);
-      const share = I(slice_pot / winners.length);
-      const odd = I(slice_pot - share * winners.length);
-      winners.forEach((idx, w_i) => {
-        const award = share + (w_i === 0 ? odd : 0);
-        seats[idx].stack = I(seats[idx].stack + award);
-        won_amt[idx] = I(won_amt[idx] + award);
-      });
-    }
-    if (!seats.some((s, i) => !s.folded && rem[i] > 0)) {
-      for (let i = 0; i < 4; i++) if (rem[i] > 0) { seats[i].stack += rem[i]; rem[i] = 0; }
-      break;
+    covered = lvl;
+    if (!side_pot) continue;
+    let best_sc = -1;
+    for (const c of contenders) if (scores[c] > best_sc) best_sc = scores[c];
+    const winners = contenders.filter(c => scores[c] === best_sc);
+    const share = I(side_pot / winners.length);
+    for (const w of winners) won_amt[w] += share;
+  }
+
+  for (let i = 0; i < 4; i++) {
+    if (won_amt[i] > 0) {
+      seats[i].stack = I(seats[i].stack + won_amt[i]);
+      seats[i].status = "WIN!";
     }
   }
 
@@ -707,6 +877,7 @@ function resolve_hand(by_fold) {
     banner_title = `YOU WIN $${won_amt[0]}!`;
     banner_sub = hnames[0] || "BEST HAND";
     banner_col = COL_GOLD;
+    sfx('win');
   } else {
     const w = best_overall_winner;
     banner_title = `${seats[w].name} WINS $${won_amt[w]}`;
@@ -759,6 +930,7 @@ function start_hand() {
   min_raise = bb;
   raise_to = bb * 2;
   turn_seat = bb_seat;
+  sfx('beep');
   advance_turn();
 }
 
@@ -766,6 +938,7 @@ function adjust_raise(delta) {
   if (state !== "player") return;
   raise_to = I(raise_to + delta);
   sync_raise_bounds();
+  sfx('beep');
   rebuild_buttons();
   draw_screen();
 }
@@ -774,6 +947,7 @@ function cycle_blinds() {
   blind_idx = (blind_idx + 1) % BLIND_LEVELS.length;
   const { sb, bb } = get_blinds();
   showToast(`Blinds: $${sb} / $${bb}`);
+  sfx('beep');
   rebuild_buttons();
   draw_screen();
 }
@@ -781,6 +955,7 @@ function cycle_blinds() {
 function reset_table() {
   for (const p of seats) p.stack = START_STACK;
   showToast("New $500 Table");
+  sfx('beep');
   start_hand();
 }
 
@@ -796,11 +971,12 @@ function on_tick() {
 
 function rebuild_buttons() {
   const { sb, bb } = get_blinds();
+  const cmp = (W < 280);
   if (state === "title") {
     active_btns = [
       { label: `BLINDS $${sb}/$${bb}`, weight: 96, enabled: true, fn: cycle_blinds },
       { label: "RESET $500", weight: 84, enabled: true, fn: reset_table },
-      { label: "DEAL HOLD'EM [D]", weight: 122, primary: true, enabled: true, fn: start_hand },
+      { label: cmp ? "DEAL" : "DEAL HOLD'EM [D]", weight: 122, primary: true, enabled: true, fn: start_hand },
     ];
     focus_idx = 3;
   } else if (state === "player") {
@@ -817,7 +993,7 @@ function rebuild_buttons() {
       { label: "+BB", weight: 36, enabled: can_raise, fn: () => {
           const max_t = I(p.street_bet + p.stack);
           raise_to = raise_to >= max_t ? I(cur_bet + Math.max(bb, min_raise)) : I(raise_to + bb);
-          sync_raise_bounds(); rebuild_buttons(); draw_screen();
+          sync_raise_bounds(); sfx('beep'); rebuild_buttons(); draw_screen();
         }},
       { label: "ALL-IN", weight: 52, enabled: p.stack > 0, fn: () => perform_action(0, "allin") },
     ];
@@ -829,285 +1005,464 @@ function rebuild_buttons() {
   } else if (state === "done") {
     active_btns = [
       { label: `$${sb}/$${bb} [B]`, weight: 88, enabled: true, fn: cycle_blinds },
-      { label: "NEW TBL [N]", weight: 94, enabled: true, fn: reset_table },
-      { label: "NEXT HAND [D]", weight: 120, primary: true, enabled: true, fn: start_hand },
+      { label: cmp ? "RESET" : "NEW TBL [N]", weight: 94, enabled: true, fn: reset_table },
+      { label: cmp ? "DEAL [D]" : "NEXT HAND [D]", weight: 120, primary: true, enabled: true, fn: start_hand },
     ];
     focus_idx = 3;
   }
 }
 
-function draw_suit_pip(x, y, suit, scale) {
-  x = I(x); y = I(y);
-  const col = (suit === 2 || suit === 3) ? COL_RED : COL_BLACK;
-  if (scale === "mini") {
-    if (suit === 1) {
-      cv.rect(x, y - 2, 1, 1, col, true);
-      cv.rect(x - 1, y - 1, 3, 1, col, true);
-      cv.rect(x - 2, y, 5, 2, col, true);
-      cv.rect(x, y + 2, 1, 2, col, true);
-    } else if (suit === 2) {
-      cv.rect(x - 2, y - 2, 2, 1, col, true);
-      cv.rect(x + 1, y - 2, 2, 1, col, true);
-      cv.rect(x - 2, y - 1, 5, 2, col, true);
-      cv.rect(x - 1, y + 1, 3, 1, col, true);
-      cv.rect(x, y + 2, 1, 1, col, true);
-    } else if (suit === 3) {
-      cv.rect(x, y - 2, 1, 1, col, true);
-      cv.rect(x - 1, y - 1, 3, 1, col, true);
-      cv.rect(x - 2, y, 5, 1, col, true);
-      cv.rect(x - 1, y + 1, 3, 1, col, true);
-      cv.rect(x, y + 2, 1, 1, col, true);
-    } else {
-      cv.rect(x - 1, y - 2, 3, 1, col, true);
-      cv.rect(x, y - 1, 1, 1, col, true);
-      cv.rect(x - 2, y, 5, 2, col, true);
-      cv.rect(x, y + 2, 1, 2, col, true);
+// Solid-Rect Vector Suit Pips matching holdem.lua
+const P2 = [
+  [0,-2,1,1,-1,-1,3,1,-2,0,5,2,0,2,1,2], [-2,-2,2,1,1,-2,2,1,-2,-1,5,2,-1,1,3,1,0,2,1,1],
+  [0,-2,1,1,-1,-1,3,1,-2,0,5,1,-1,1,3,1,0,2,1,1], [-1,-2,3,1,0,-1,1,1,-2,0,5,2,0,2,1,2]
+];
+const P4 = [
+  [0,-3,1,1,-1,-2,3,1,-2,-1,5,1,-3,0,7,2,0,2,1,1,-1,3,3,1],
+  [-2,-3,2,1,1,-3,2,1,-3,-2,3,1,1,-2,3,1,-3,-1,7,2,-2,1,5,1,-1,2,3,1,0,3,1,1],
+  [0,-3,1,1,-1,-2,3,1,-2,-1,5,1,-3,0,7,1,-2,1,5,1,-1,2,3,1,0,3,1,1],
+  [-1,-3,3,2,-3,-1,2,2,2,-1,2,2,-1,-1,3,2,0,1,1,2,-1,3,3,1]
+];
+const P5 = [
+  [0,-5,1,1,-1,-4,3,1,-2,-3,5,1,-3,-2,7,1,-4,-1,9,1,-5,0,11,2,-4,2,3,1,0,2,1,1,2,2,3,1,-1,3,3,1,-2,4,5,1,-3,5,7,1],
+  [-3,-5,2,1,2,-5,2,1,-4,-4,4,1,1,-4,4,1,-5,-3,11,3,-4,0,9,1,-3,1,7,1,-2,2,5,1,-1,3,3,1,0,4,1,2],
+  [0,-5,1,1,-1,-4,3,1,-2,-3,5,2,-3,-1,7,1,-4,0,9,1,-3,1,7,1,-2,2,5,2,-1,4,3,1,0,5,1,1],
+  [-1,-5,3,1,-2,-4,5,2,-1,-2,3,1,-4,-1,3,1,0,-1,1,1,2,-1,3,1,-5,0,11,2,-4,2,3,1,0,2,1,1,2,2,3,1,-1,3,3,2,-3,5,7,1]
+];
+
+function disk(cx, cy, r, c) {
+  r = Math.max(1, I(r));
+  const k = Math.max(1, I(r * 0.68));
+  cv.rect(cx - k, cy - r, k * 2 + 1, r * 2 + 1, c, true);
+  cv.rect(cx - r, cy - k, r * 2 + 1, k * 2 + 1, c, true);
+}
+
+function draw_suit_pip(x, y, suit, r) {
+  x = I(x); y = I(y); r = Math.max(2, I(r));
+  const c = (suit === 2 || suit === 3) ? COL_RED : COL_BLACK;
+  const tb = (r <= 2) ? P2 : ((r <= 4) ? P4 : ((r === 5) ? P5 : null));
+  if (tb) {
+    const d = tb[suit - 1] || tb[3];
+    for (let i = 0; i < d.length; i += 4) {
+      cv.rect(x + d[i], y + d[i + 1], d[i + 2], d[i + 3], c, true);
     }
-  } else if (scale === "small") {
-    if (suit === 1) {
-      cv.rect(x, y - 3, 1, 1, col, true);
-      cv.rect(x - 1, y - 2, 3, 1, col, true);
-      cv.rect(x - 2, y - 1, 5, 1, col, true);
-      cv.rect(x - 3, y, 7, 2, col, true);
-      cv.rect(x, y + 2, 1, 1, col, true);
-      cv.rect(x - 1, y + 3, 3, 1, col, true);
-    } else if (suit === 2) {
-      cv.rect(x - 2, y - 3, 2, 1, col, true);
-      cv.rect(x + 1, y - 3, 2, 1, col, true);
-      cv.rect(x - 3, y - 2, 3, 1, col, true);
-      cv.rect(x + 1, y - 2, 3, 1, col, true);
-      cv.rect(x - 3, y - 1, 7, 2, col, true);
-      cv.rect(x - 2, y + 1, 5, 1, col, true);
-      cv.rect(x - 1, y + 2, 3, 1, col, true);
-      cv.rect(x, y + 3, 1, 1, col, true);
-    } else if (suit === 3) {
-      cv.rect(x, y - 3, 1, 1, col, true);
-      cv.rect(x - 1, y - 2, 3, 1, col, true);
-      cv.rect(x - 2, y - 1, 5, 1, col, true);
-      cv.rect(x - 3, y, 7, 1, col, true);
-      cv.rect(x - 2, y + 1, 5, 1, col, true);
-      cv.rect(x - 1, y + 2, 3, 1, col, true);
-      cv.rect(x, y + 3, 1, 1, col, true);
-    } else {
-      cv.rect(x - 1, y - 3, 3, 2, col, true);
-      cv.rect(x - 3, y - 1, 2, 2, col, true);
-      cv.rect(x + 2, y - 1, 2, 2, col, true);
-      cv.rect(x - 1, y - 1, 3, 2, col, true);
-      cv.rect(x, y + 1, 1, 2, col, true);
-      cv.rect(x - 1, y + 3, 3, 1, col, true);
+    return;
+  }
+  // r > 5 analytical vector rendering matching holdem.lua
+  if (suit === 1) { // SPADE
+    const bt = I(r * 0.25), sp = Math.max(1, r + bt);
+    for (let dy = -r; dy <= bt; dy += 2) {
+      const hw = I(((dy + r) * r) / sp);
+      cv.rect(x - hw, y + dy, hw * 2 + 1, 2, c, true);
     }
-  } else {
-    if (suit === 1) {
-      cv.rect(x, y - 5, 1, 1, col, true);
-      cv.rect(x - 1, y - 4, 3, 1, col, true);
-      cv.rect(x - 2, y - 3, 5, 1, col, true);
-      cv.rect(x - 3, y - 2, 7, 1, col, true);
-      cv.rect(x - 4, y - 1, 9, 1, col, true);
-      cv.rect(x - 5, y, 11, 2, col, true);
-      cv.rect(x - 4, y + 2, 3, 1, col, true);
-      cv.rect(x, y + 2, 1, 1, col, true);
-      cv.rect(x + 2, y + 2, 3, 1, col, true);
-      cv.rect(x - 1, y + 3, 3, 1, col, true);
-      cv.rect(x - 2, y + 4, 5, 1, col, true);
-      cv.rect(x - 3, y + 5, 7, 1, col, true);
-    } else if (suit === 2) {
-      cv.rect(x - 3, y - 5, 2, 1, col, true);
-      cv.rect(x + 2, y - 5, 2, 1, col, true);
-      cv.rect(x - 4, y - 4, 4, 1, col, true);
-      cv.rect(x + 1, y - 4, 4, 1, col, true);
-      cv.rect(x - 5, y - 3, 11, 3, col, true);
-      cv.rect(x - 4, y, 9, 1, col, true);
-      cv.rect(x - 3, y + 1, 7, 1, col, true);
-      cv.rect(x - 2, y + 2, 5, 1, col, true);
-      cv.rect(x - 1, y + 3, 3, 1, col, true);
-      cv.rect(x, y + 4, 1, 2, col, true);
-    } else if (suit === 3) {
-      cv.rect(x, y - 5, 1, 1, col, true);
-      cv.rect(x - 1, y - 4, 3, 1, col, true);
-      cv.rect(x - 2, y - 3, 5, 2, col, true);
-      cv.rect(x - 3, y - 1, 7, 1, col, true);
-      cv.rect(x - 4, y, 9, 1, col, true);
-      cv.rect(x - 3, y + 1, 7, 1, col, true);
-      cv.rect(x - 2, y + 2, 5, 2, col, true);
-      cv.rect(x - 1, y + 4, 3, 1, col, true);
-      cv.rect(x, y + 5, 1, 1, col, true);
-    } else {
-      cv.rect(x - 1, y - 5, 3, 1, col, true);
-      cv.rect(x - 2, y - 4, 5, 2, col, true);
-      cv.rect(x - 1, y - 2, 3, 1, col, true);
-      cv.rect(x - 4, y - 1, 3, 1, col, true);
-      cv.rect(x, y - 1, 1, 1, col, true);
-      cv.rect(x + 2, y - 1, 3, 1, col, true);
-      cv.rect(x - 5, y, 11, 2, col, true);
-      cv.rect(x - 4, y + 2, 3, 1, col, true);
-      cv.rect(x, y + 2, 1, 1, col, true);
-      cv.rect(x + 2, y + 2, 3, 1, col, true);
-      cv.rect(x - 1, y + 3, 3, 2, col, true);
-      cv.rect(x - 3, y + 5, 7, 1, col, true);
+    const lr = Math.max(2, I(r * 0.36)), lx = Math.max(2, I(r * 0.42)), ly = I(r * 0.22);
+    disk(x - lx, y + ly, lr, c);
+    disk(x + lx, y + ly, lr, c);
+    const sw = Math.max(1, I(r * 0.22) * 2 + 1), st = I(r * 0.25), bw = Math.max(2, I(r * 0.55));
+    cv.rect(x - I(sw / 2), y + st, sw, Math.max(2, r - st + 1), c, true);
+    cv.rect(x - bw, y + r, bw * 2 + 1, Math.max(1, I(r * 0.18)), c, true);
+  } else if (suit === 2) { // HEART
+    const lr = Math.max(2, I(r * 0.46)), lx = Math.max(2, I(r * 0.46)), ly = I(r * 0.32), td = -I(r * 0.18);
+    disk(x - lx, y - ly, lr, c);
+    disk(x + lx, y - ly, lr, c);
+    const sp = Math.max(1, r - td);
+    for (let dy = td; dy <= r; dy += 2) {
+      const hw = Math.max(0, I(((r - dy) * r) / sp));
+      cv.rect(x - hw, y + dy, hw * 2 + 1, 2, c, true);
     }
+  } else if (suit === 3) { // DIAMOND
+    for (let dy = -r; dy <= r; dy += 2) {
+      const hw = Math.max(0, I((r - Math.abs(dy)) * 0.85));
+      cv.rect(x - hw, y + dy, hw * 2 + 1, 2, c, true);
+    }
+  } else { // CLUB
+    const lr = Math.max(2, I(r * 0.38)), lx = Math.max(2, I(r * 0.48)), ty = I(r * 0.48), by = I(r * 0.14);
+    disk(x, y - ty, lr, c);
+    disk(x - lx, y + by, lr, c);
+    disk(x + lx, y + by, lr, c);
+    const sw = Math.max(1, I(r * 0.22) * 2 + 1), bw = Math.max(2, I(r * 0.52));
+    cv.rect(x - I(sw / 2), y - I(r * 0.1), sw, Math.max(2, r + I(r * 0.1) + 1), c, true);
+    cv.rect(x - bw, y + r, bw * 2 + 1, Math.max(1, I(r * 0.18)), c, true);
   }
 }
 
-function draw_card_box(x, y, cw, ch, card, hidden) {
+function draw_card_box(x, y, cw, ch, cd, hid, smo, lgo) {
   x = I(x); y = I(y); cw = I(cw); ch = I(ch);
-  cv.rect(x - 1, y + 1, cw + 2, ch, COL_CARD_SHAD, true, 3);
-  if (hidden || !card) {
-    cv.rect(x, y, cw, ch, COL_CARD_BG, true, 3);
-    cv.rect(x + 1, y + 1, cw - 2, ch - 2, COL_CARD_BACK, true, 2);
+  const rd = cw >= 64 ? 8 : 3, sh = cw >= 64 ? 3 : 1;
+  cv.rect(x - 1, y + sh, cw + sh + 1, ch, COL_CARD_SHAD, true, rd);
+  if (hid || !cd) {
+    const p1 = cw >= 64 ? 3 : 1, p2 = cw >= 64 ? 6 : 3;
+    cv.rect(x, y, cw, ch, COL_CARD_BG, true, rd);
+    cv.rect(x + p1, y + p1, cw - p1 * 2, ch - p1 * 2, COL_CARD_BACK, true, Math.max(2, rd - 1));
     if (cw >= 26) {
-      cv.rect(x + 3, y + 3, cw - 6, ch - 6, COL_CARD_TRIM, false, 2);
+      cv.rect(x + p2, y + p2, cw - p2 * 2, ch - p2 * 2, COL_CARD_TRIM, false, Math.max(2, rd - 2));
       const ew = Math.max(6, I(cw * 0.28)), eh = Math.max(6, I(ch * 0.22));
       cv.rect(I(x + (cw - ew) / 2), I(y + (ch - eh) / 2), ew, eh, COL_GOLD, false, 2);
     }
     return;
   }
-  cv.rect(x, y, cw, ch, COL_CARD_BG, true, 3);
-  cv.rect(x, y, cw, ch, 0x64748B, false, 3);
-  const col = (card.s === 2 || card.s === 3) ? COL_RED : COL_BLACK;
-  const rstr = RANKS[card.r - 1];
-  if (cw <= 22) {
-    cv.text(x + 2, y + 1, rstr, col, 10);
-    draw_suit_pip(x + I(cw / 2), y + ch - 7, card.s, "mini");
+  cv.rect(x, y, cw, ch, COL_CARD_BG, true, rd);
+  cv.rect(x, y, cw, ch, 0x64748B, false, rd);
+  const c = (cd.s === 2 || cd.s === 3) ? COL_RED : COL_BLACK;
+  const rs = RANKS[cd.r - 1];
+  if (cw <= 24) {
+    cv.text(x + 2, y + 1, rs, c, 10);
+    draw_suit_pip(x + I(cw / 2), y + ch - 7, cd.s, 2);
+  } else if (cw < 64) {
+    cv.text(x + 3, y + 2, rs, c, 12);
+    if (cw >= 32) draw_suit_pip(x + cw - 7, y + 8, cd.s, smo || 3);
+    draw_suit_pip(x + I(cw / 2), y + I(ch / 2) + 5, cd.s, lgo || 5);
   } else {
-    cv.text(x + 3, y + 2, rstr, col, 12);
-    if (cw >= 32) draw_suit_pip(x + cw - 7, y + 8, card.s, "small");
-    draw_suit_pip(x + I(cw / 2), y + I(ch / 2) + 5, card.s, "large");
+    const sm = smo || p_sm, lg = lgo || p_lg;
+    cv.text(x + 6, y + 4, rs, c, f_rk);
+    draw_suit_pip(x + cw - sm - 7, y + sm + 6, cd.s, sm);
+    if (cw >= 72 && ch >= 96) {
+      cv.text(x + cw - 6 - text_w(rs, f_rk), y + ch - 4 - text_h(f_rk), rs, c, f_rk);
+      draw_suit_pip(x + sm + 7, y + ch - sm - 7, cd.s, sm);
+    }
+    draw_suit_pip(x + I(cw / 2), I(y + ch / 2), cd.s, lg);
   }
 }
 
 function draw_ai_pod(idx, px, py, pw, ph) {
   px = I(px); py = I(py); pw = I(pw); ph = I(ph);
-  const p = seats[idx];
-  const is_turn = state === "ai" && turn_seat === idx;
+  const p = seats[idx - 1];
+  const is_turn = (state === "ai" && turn_seat === idx - 1);
   const bg = p.folded ? COL_POD_FOLD : COL_POD_BG;
   const border = is_turn ? COL_GOLD : (p.status === "WIN!" ? C.good : 0x22303C);
+  cv.rect(px, py, pw, ph, bg, true, s2 ? 8 : 5);
+  cv.rect(px, py, pw, ph, border, false, s2 ? 8 : 5);
 
-  cv.rect(px, py, pw, ph, bg, true, 5);
-  cv.rect(px, py, pw, ph, border, false, 5);
-
-  const head = p.role ? `${p.name}·${p.role}` : p.name;
-  cv.text(px + 4, py + 2, head, p.folded ? COL_TEXT_DIM : (is_turn ? COL_GOLD : C.text), 10);
-  cv.text(px + 4, py + 14, `$${I(p.stack)}`, p.folded ? COL_TEXT_DIM : COL_GOLD, 11);
-
+  const hd = p.role ? `${p.name}·${p.role}` : p.name;
+  const nc = p.folded ? COL_TEXT_DIM : (is_turn ? COL_GOLD : C.text);
+  const sc = p.folded ? COL_TEXT_DIM : COL_GOLD;
   const st = p.status || (p.all_in ? "ALL-IN" : "WAIT");
-  const st_col = p.folded ? COL_TEXT_DIM : (p.status === "WIN!" ? C.good : (is_turn ? C.accent : C.sub));
-  cv.text(px + 4, py + 27, st, st_col, 10);
+  const stc = p.folded ? COL_TEXT_DIM : (p.status === "WIN!" ? C.good : (is_turn ? C.accent : C.sub));
 
-  if (p.cards.length === 2 && !p.folded) {
-    if (show_all_cards) {
-      draw_card_box(px + pw - 39, py + 4, 18, 25, p.cards[0], false);
-      draw_card_box(px + pw - 20, py + 4, 18, 25, p.cards[1], false);
-    } else {
-      draw_card_box(px + pw - 33, py + 5, 15, 22, p.cards[0], true);
-      draw_card_box(px + pw - 20, py + 5, 15, 22, p.cards[1], true);
+  if (s2 && ph >= 110) {
+    cv.text(px + 10, py + 8, hd, nc, f_md);
+    cv.text(px + 10, py + 10 + lh_md, `$${I(p.stack)}`, sc, f_md);
+    cv.text(px + 10, py + ph - lh_sm - 8, st, stc, f_sm);
+    if (p.cards.length === 2 && !p.folded) {
+      draw_card_box(px + pw - 96, py + 12, 42, 58, p.cards[0], !show_all_cards, 3, 6);
+      draw_card_box(px + pw - 48, py + 12, 42, 58, p.cards[1], !show_all_cards, 3, 6);
+    }
+  } else if (s2) {
+    cv.text(px + 12, py + 6, hd, nc, f_md);
+    cv.text(px + 12, py + 8 + lh_md, `$${I(p.stack)}`, sc, f_md);
+    cv.text(px + 12, py + 10 + lh_md * 2, st, stc, f_sm);
+    if (p.cards.length === 2 && !p.folded) {
+      const mh = ph - 14, mw = I(mh * 0.72);
+      draw_card_box(px + pw - mw * 2 - 14, py + 7, mw, mh, p.cards[0], !show_all_cards, 3, 6);
+      draw_card_box(px + pw - mw - 8, py + 7, mw, mh, p.cards[1], !show_all_cards, 3, 6);
+    }
+  } else {
+    cv.text(px + 4, py + 2, hd, nc, f_xs);
+    cv.text(px + 4, py + 14, `$${I(p.stack)}`, sc, f_sm);
+    cv.text(px + 4, py + 27, st, stc, f_xs);
+    if (p.cards.length === 2 && !p.folded && pw >= 84) {
+      const w = show_all_cards ? 18 : 15, h = show_all_cards ? 25 : 22, o = show_all_cards ? 39 : 33;
+      draw_card_box(px + pw - o, py + 4, w, h, p.cards[0], !show_all_cards);
+      draw_card_box(px + pw - 20, py + 4, w, h, p.cards[1], !show_all_cards);
     }
   }
 }
 
-function draw_screen() {
-  const top_h = 20, bot_h = 30, table_h = H - top_h - bot_h;
-  const { sb, bb } = get_blinds();
+function draw_board_row(sx, y, r) {
+  for (let i = 0; i < 5; i++) {
+    const cx = sx + i * (cc_w + cc_g);
+    if (board[i]) {
+      draw_card_box(cx, y, cc_w, cc_h, board[i], false);
+    } else {
+      cv.rect(cx, y, cc_w, cc_h, COL_FELT_DARK, true, r);
+      cv.rect(cx, y, cc_w, cc_h, COL_FELT_LINE, false, r);
+    }
+  }
+}
 
+function compute_layout() {
+  const s = Math.min(W, H), l = Math.max(W, H);
+  port = (H > W);
+  if (l >= 1185 || (W === 568 && H >= 900) || (W >= 1185 && H >= 460)) {
+    dname = "T-Display P4 AMOLED"; s2 = true;
+  } else if ((l >= 1050 && l < 1185) || (W === 540 && H >= 900) || (W >= 500 && W < 560 && H >= 900)) {
+    dname = "T-Display P4 LCD"; s2 = true;
+  } else if (l >= 700 || s >= 460) {
+    dname = "Large HD"; s2 = true;
+  } else {
+    dname = (W >= 440 && H < 320) ? "Wide Compact" : ((port && W <= 260) ? "Compact Portrait" : "T-Deck");
+    s2 = false;
+  }
+
+  if (s2) {
+    f_xs = 14; f_sm = 14; f_md = 16; f_lg = 20; f_xl = 24; f_rk = 16;
+  } else {
+    f_xs = 10; f_sm = 11; f_md = 12; f_lg = 14; f_xl = 16; f_rk = 12;
+  }
+  lh_xs = text_h(f_xs); lh_sm = text_h(f_sm); lh_md = text_h(f_md); lh_lg = text_h(f_lg); lh_xl = text_h(f_xl);
+
+  if (s2) {
+    top_h = Math.max(lh_md + 16, 40);
+    bot_h = port ? Math.max(lh_md + 42, 72) : Math.max(lh_md + 26, 54);
+    pad = 14; gap = 8;
+  } else {
+    top_h = 20; bot_h = 30; pad = 6; gap = 4;
+  }
+  tbl_h = Math.max(80, H - top_h - bot_h);
+
+  if (port && s2) {
+    cc_g = 10;
+    cc_w = clamp(Math.floor((W - 36 - cc_g * 4) / 5), 86, 98);
+    cc_h = Math.floor(cc_w * 1.4);
+    p_cw = clamp(Math.floor(W * 0.175), 92, 104);
+    p_ch = Math.floor(p_cw * 1.4);
+    p_sm = 6; p_lg = 13;
+  } else if (s2) {
+    cc_h = clamp(Math.floor(tbl_h * 0.3), 88, 120);
+    cc_w = Math.floor(cc_h * 0.74);
+    cc_g = 12; p_cw = cc_w; p_ch = cc_h;
+    p_sm = 5; p_lg = 11;
+  } else if (port) {
+    cc_g = 4;
+    cc_w = clamp(Math.floor((W - 16 - cc_g * 4) / 5), 34, 40);
+    cc_h = clamp(Math.floor(cc_w * 1.32), 44, 52);
+    p_cw = 35; p_ch = 46; p_sm = 3; p_lg = 5;
+  } else {
+    cc_h = clamp(Math.floor(tbl_h * 0.3), 40, 48);
+    cc_w = clamp(Math.floor(cc_h * 0.77), 32, 37);
+    cc_g = 5; p_cw = cc_w; p_ch = cc_h; p_sm = 3; p_lg = 5;
+  }
+}
+
+function draw_screen() {
+  const { sb, bb } = get_blinds();
+  const cx = I(W / 2);
   cv.fill(COL_FELT);
-  cv.rect(3, top_h + 2, W - 6, table_h - 4, COL_FELT_LINE, false, 7);
+  const m = s2 ? 8 : 3;
+  cv.rect(m, top_h + m - 1, W - m * 2, tbl_h - (m - 1) * 2, COL_FELT_LINE, false, s2 ? 12 : 7);
   cv.rect(0, 0, W, top_h, COL_TOPBAR, true);
   cv.line(0, top_h, W, top_h, 0x1F2933, 1);
 
-  cv.text(6, 3, `STACK $${I(seats[0].stack)}`, COL_GOLD, 12);
-  const mid_top_str = state === "title" ? `BLINDS $${sb}/$${bb}` : `${STREET_NAMES[street] || "HOLD'EM"} · $${sb}/$${bb}`;
-  cv.text(I((W - text_w(mid_top_str, 11)) / 2), 4, mid_top_str, C.accent, 11);
+  const tf = s2 ? f_md : f_sm;
+  const ty = Math.max(1, I((top_h - text_h(tf)) / 2));
+  cv.text(pad, ty, `STACK $${I(seats[0].stack)}`, COL_GOLD, tf);
 
-  const pk_str = `PEAK $${I(best_bank)}${sound_on ? "" : "[M]"}`;
-  cv.text(W - text_w(pk_str, 11) - 6, 4, pk_str, C.sub, 11);
+  const ms = state === "title" ? `BLINDS $${sb}/$${bb}` : `${STREET_NAMES[street] || "HOLD'EM"} · $${sb}/$${bb}`;
+  const mx = I((W - text_w(ms, tf)) / 2);
+  cv.text(mx, ty, ms, C.accent, tf);
+
+  const ps = `PEAK $${I(best_bank)}${sound_on ? "" : " [M]"}`;
+  cv.text(Math.max(mx + text_w(ms, tf) + 6, W - text_w(ps, tf) - pad), ty, ps, C.sub, tf);
 
   if (state === "title") {
-    const pad_x = 12, box_w = W - pad_x * 2;
-    cv.rect(pad_x, top_h + 8, box_w, table_h - 16, COL_FELT_DARK, true, 8);
-    cv.rect(pad_x, top_h + 8, box_w, table_h - 16, COL_FELT_LINE, false, 8);
-    draw_card_box(pad_x + 10, top_h + 18, 32, 44, { r: 1, s: 1 }, false);
-    draw_card_box(W - pad_x - 42, top_h + 18, 32, 44, { r: 1, s: 2 }, false);
+    const px = s2 ? 20 : 12, py = s2 ? 16 : 8;
+    const bw = W - px * 2, bh = tbl_h - py * 2, by = top_h + py;
+    cv.rect(px, by, bw, bh, COL_FELT_DARK, true, s2 ? 12 : 8);
+    cv.rect(px, by, bw, bh, COL_FELT_LINE, false, s2 ? 12 : 8);
+    const pl = `BLINDS: $${sb} / $${bb}   BUY-IN: $${I(seats[0].stack)}`;
 
-    const t1 = "TEXAS HOLD'EM";
-    cv.text(I((W - text_w(t1, 16)) / 2), top_h + 18, t1, COL_GOLD, 16);
-    const t2 = "No-Limit 4-Max  ·  3 AI Opponents";
-    cv.text(I((W - text_w(t2, 11)) / 2), top_h + 42, t2, C.sub, 11);
+    if (port && s2) {
+      let cy = by + I(bh * 0.07);
+      cv.text(I(cx - text_w("TEXAS HOLD'EM", f_xl) / 2), cy, "TEXAS HOLD'EM", COL_GOLD, f_xl);
+      cy += lh_xl + 10;
+      cv.text(I(cx - text_w("No-Limit 4-Max  ·  3 AI Opponents", f_sm) / 2), cy, "No-Limit 4-Max  ·  3 AI Opponents", C.sub, f_sm);
+      cy += lh_sm + 6;
+      const dstr = `${dname}  (${W}x${H})`;
+      cv.text(I(cx - text_w(dstr, f_sm) / 2), cy, dstr, COL_FELT_LINE, f_sm);
+      cy += lh_sm + I(bh * 0.05);
 
-    const pill = `BLINDS: $${sb} / $${bb}   BUY-IN: $${I(seats[0].stack)}`;
-    const pw = text_w(pill, 12), py = top_h + 74;
-    cv.rect(I((W - pw) / 2) - 10, py, pw + 20, 24, COL_BTN_ACT, true, 5);
-    cv.rect(I((W - pw) / 2) - 10, py, pw + 20, 24, C.accent, false, 5);
-    cv.text(I((W - pw) / 2), py + 5, pill, C.text, 12);
+      draw_card_box(cx - p_cw - 12, cy, p_cw, p_ch, { r: 1, s: 1 }, false);
+      draw_card_box(cx + 12, cy, p_cw, p_ch, { r: 1, s: 2 }, false);
+      cy += p_ch + I(bh * 0.06);
 
-    const hint = "Tap [DEAL HOLD'EM] or press [D] to play";
-    cv.text(I((W - text_w(hint, 11)) / 2), top_h + table_h - 25, hint, C.sub, 11);
-  } else {
-    const pod_y = top_h + 4, pod_w = I((W - 20) / 3);
-    draw_ai_pod(1, 6, pod_y, pod_w, 40);
-    draw_ai_pod(2, 6 + pod_w + 4, pod_y, pod_w, 40);
-    draw_ai_pod(3, 6 + (pod_w + 4) * 2, pod_y, pod_w, 40);
+      const pw = text_w(pl, f_lg), ph = lh_lg + 24;
+      cv.rect(cx - I((pw + 48) / 2), cy, pw + 48, ph, COL_BTN_ACT, true, 10);
+      cv.rect(cx - I((pw + 48) / 2), cy, pw + 48, ph, C.accent, false, 10);
+      cv.text(cx - I(pw / 2), cy + I((ph - lh_lg) / 2), pl, C.text, f_lg);
+      cy += ph + I(bh * 0.05);
 
-    const mid_y = top_h + 48, pot_w = 94;
-    cv.rect(6, mid_y, pot_w, 48, COL_FELT_DARK, true, 5);
-    cv.rect(6, mid_y, pot_w, 48, COL_FELT_LINE, false, 5);
-    cv.text(11, mid_y + 4, "TOTAL POT", C.sub, 10);
-    cv.text(11, mid_y + 16, `$${I(pot)}`, COL_GOLD, 14);
+      const pct = hands_played > 0 ? I((hands_won * 100) / hands_played) : 0;
+      const stat_str = `Hands Played: ${I(hands_played)}   ·   Won: ${I(hands_won)} (${pct}%)`;
+      cv.text(I(cx - text_w(stat_str, f_sm) / 2), cy, stat_str, C.sub, f_sm);
 
-    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
-    const call_info = state === "done" ? "HAND OVER" : (to_call > 0 ? `TO CALL: $${to_call}` : "CHECK OK");
-    cv.text(11, mid_y + 34, call_info, C.accent, 10);
+      const deal_hint = "Tap [DEAL HOLD'EM] below to start a hand";
+      cv.text(I(cx - text_w(deal_hint, f_sm) / 2), by + bh - lh_sm - 18, deal_hint, C.sub, f_sm);
+    } else {
+      const dw = s2 ? 64 : 32, dh = s2 ? 90 : 44;
+      if (W >= 280) {
+        draw_card_box(px + 10, by + 10, dw, dh, { r: 1, s: 1 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
+        draw_card_box(W - px - dw - 10, by + 10, dw, dh, { r: 1, s: 2 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
+      }
+      cv.text(I(cx - text_w("TEXAS HOLD'EM", f_xl) / 2), by + 10, "TEXAS HOLD'EM", COL_GOLD, f_xl);
+      const t2y = by + 14 + lh_xl;
+      cv.text(I(cx - text_w("No-Limit 4-Max  ·  3 AI Opponents", f_sm) / 2), t2y, "No-Limit 4-Max  ·  3 AI Opponents", C.sub, f_sm);
 
-    const cc_w = 37, cc_h = 48, cc_gap = 5, cc_start_x = 106;
-    for (let i = 0; i < 5; i++) {
-      const cx = cc_start_x + i * (cc_w + cc_gap);
-      if (board[i]) draw_card_box(cx, mid_y, cc_w, cc_h, board[i], false);
-      else {
-        cv.rect(cx, mid_y, cc_w, cc_h, COL_FELT_DARK, true, 3);
-        cv.rect(cx, mid_y, cc_w, cc_h, COL_FELT_LINE, false, 3);
+      const pw = text_w(pl, f_md), ph = lh_md + (s2 ? 16 : 8), plw = pw + (s2 ? 36 : 20);
+      const p_y = Math.max(t2y + lh_sm + 8, I(by + (bh - ph) * 0.54));
+      cv.rect(cx - I(plw / 2), p_y, plw, ph, COL_BTN_ACT, true, 5);
+      cv.rect(cx - I(plw / 2), p_y, plw, ph, C.accent, false, 5);
+      cv.text(cx - I(pw / 2), p_y + I((ph - lh_md) / 2), pl, C.text, f_md);
+
+      const hy = by + bh - lh_sm - (s2 ? 12 : 6);
+      if (hy > p_y + ph + 4) {
+        const hint = W >= 300 ? "Tap [DEAL HOLD'EM] or press [D] to play" : "Tap [DEAL] below to play";
+        cv.text(I(cx - text_w(hint, f_sm) / 2), hy, hint, C.sub, f_sm);
       }
     }
+  } else if (port && s2) {
+    // T-Display P4 Portrait Mode
+    const px = 16, pg = 10, ph = 126, py = top_h + 16;
+    const pw = I((W - px * 2 - pg * 2) / 3);
+    for (let i = 0; i < 3; i++) draw_ai_pod(i + 2, px + i * (pw + pg), py, pw, ph);
 
-    const py = top_h + 102, p = seats[0];
-    if (p.cards.length === 2) {
-      draw_card_box(6, py, 34, 48, p.cards[0], false);
-      draw_card_box(42, py, 34, 48, p.cards[1], false);
+    const pby = py + ph + 22, pbh = 68;
+    cv.rect(px, pby, W - px * 2, pbh, COL_FELT_DARK, true, 10);
+    cv.rect(px, pby, W - px * 2, pbh, COL_FELT_LINE, false, 10);
+    cv.text(px + 18, pby + I((pbh - lh_xl) / 2), `TOTAL POT: $${I(pot)}`, COL_GOLD, f_xl);
+
+    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
+    const cs = state === "done" ? "HAND COMPLETE" : (to_call > 0 ? `TO CALL: $${to_call}` : "CHECK AVAILABLE");
+    cv.text(W - px - text_w(cs, f_md) - 18, pby + I((pbh - lh_md) / 2), cs, C.accent, f_md);
+
+    const ccy = pby + pbh + 24;
+    draw_board_row(I((W - (cc_w * 5 + cc_g * 4)) / 2), ccy, 8);
+
+    const p = seats[0], pih = 98, piy = top_h + tbl_h - 114;
+    const pcy = piy - p_ch - 18, mcy = I((ccy + cc_h + pcy) / 2);
+
+    if (state === "done" && banner_title) {
+      const bw = W - px * 2 - 24, bh = lh_xl + lh_md + 28, by = I(mcy - bh / 2);
+      cv.rect(cx - I(bw / 2), by, bw, bh, 0x0D131A, true, 10);
+      cv.rect(cx - I(bw / 2), by, bw, bh, banner_col, false, 10);
+      cv.text(I(cx - text_w(banner_title, f_xl) / 2), by + 8, banner_title, banner_col, f_xl);
+      cv.text(I(cx - text_w(banner_sub, f_md) / 2), by + 12 + lh_xl, banner_sub, C.text, f_md);
+    } else {
+      cv.line(px + 24, mcy, W - px - 24, mcy, COL_FELT_LINE, 1);
     }
 
-    const info_x = 82, info_w = W - info_x - 6;
+    if (p.cards.length === 2) {
+      draw_card_box(cx - p_cw - 9, pcy, p_cw, p_ch, p.cards[0], false);
+      draw_card_box(cx + 9, pcy, p_cw, p_ch, p.cards[1], false);
+    }
+
+    cv.rect(px, piy, W - px * 2, pih, COL_POD_BG, true, 10);
+    cv.rect(px, piy, W - px * 2, pih, state === "player" ? C.accent : 0x22303C, false, 10);
+
+    const you_hdr = p.role ? `YOU [${p.role}]  ·  STREET BET: $${I(p.street_bet)}` : `YOU  ·  STREET BET: $${I(p.street_bet)}`;
+    cv.text(px + 16, piy + 10, you_hdr, C.text, f_md);
+
+    const [, , hn] = eval_best_hand(p.cards, board);
+    const hs = p.folded ? "FOLDED" : hn;
+    cv.text(W - px - text_w(hs, f_md) - 16, piy + 10, hs, p.folded ? C.bad : COL_GOLD, f_md);
+
+    const line2 = state === "player" ? `RAISE TARGET: $${I(raise_to)}   (Tap +BB or Up/Down)` : (p.status ? `STATUS: ${p.status}` : "WAITING FOR TABLE...");
+    cv.text(px + 16, piy + 14 + lh_md, line2, C.accent, f_sm);
+    cv.text(px + 16, piy + 18 + lh_md + lh_sm, "Touch action buttons below  ·  Tap table after hand to deal", C.sub, f_sm);
+  } else if (port) {
+    // Compact Portrait Mode (Heltec V4)
+    const py = top_h + 4, pw = I((W - 16) / 3);
+    for (let i = 0; i < 3; i++) draw_ai_pod(i + 2, 4 + i * (pw + 4), py, pw, 40);
+
+    const sy = py + 43;
+    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
+    const tc_str = to_call > 0 ? `CALL $${to_call}` : "CHECK OK";
+    const pstr = `POT $${I(pot)}   ·   ${tc_str}`;
+    cv.text(I(cx - text_w(pstr, f_sm) / 2), sy, pstr, COL_GOLD, f_sm);
+
+    const ccy = sy + 16;
+    draw_board_row(I((W - (cc_w * 5 + cc_g * 4)) / 2), ccy, 3);
+
+    const hy = ccy + cc_h + 6, p = seats[0];
+    if (p.cards.length === 2) {
+      draw_card_box(6, hy, p_cw, p_ch, p.cards[0], false);
+      draw_card_box(34, hy, p_cw, p_ch, p.cards[1], false);
+    }
+
+    const ix = 74, iw = W - 78;
     if (state === "done" && banner_title) {
-      cv.rect(info_x, py + 2, info_w, 44, 0x0D131A, true, 6);
-      cv.rect(info_x, py + 2, info_w, 44, banner_col, false, 6);
-      cv.text(info_x + I((info_w - text_w(banner_title, 14)) / 2), py + 6, banner_title, banner_col, 14);
-      cv.text(info_x + I((info_w - text_w(banner_sub, 11)) / 2), py + 26, banner_sub, C.text, 11);
+      cv.rect(ix, hy, iw, p_ch, 0x0D131A, true, 5);
+      cv.rect(ix, hy, iw, p_ch, banner_col, false, 5);
+      cv.text(I(ix + iw / 2 - text_w(banner_title, f_md) / 2), hy + 6, banner_title, banner_col, f_md);
+      cv.text(I(ix + iw / 2 - text_w(banner_sub, f_xs) / 2), hy + 24, banner_sub, C.text, f_xs);
     } else {
-      cv.rect(info_x, py + 2, info_w, 44, COL_POD_BG, true, 5);
-      cv.rect(info_x, py + 2, info_w, 44, state === "player" ? C.accent : 0x22303C, false, 5);
+      cv.rect(ix, hy, iw, p_ch, COL_POD_BG, true, 5);
+      cv.rect(ix, hy, iw, p_ch, state === "player" ? C.accent : 0x22303C, false, 5);
+      const [, , hn] = eval_best_hand(p.cards, board);
+      cv.text(ix + 4, hy + 4, p.folded ? "FOLDED" : hn, COL_GOLD, f_xs);
+      cv.text(ix + 4, hy + 18, `BET $${I(p.street_bet)}  R:$${I(raise_to)}`, C.accent, f_xs);
+      cv.text(ix + 4, hy + 31, p.status ? p.status : "YOUR TURN", C.sub, f_xs);
+    }
+  } else {
+    // Landscape Mode (T-Deck, Pager, T-Display P4 Landscape)
+    const vp = s2 ? 12 : 4, hp = s2 ? 16 : 6, pg = s2 ? 12 : 4;
+    const py = top_h + vp, ph = s2 ? I(tbl_h * 0.27) : 40;
+    const pw = I((W - hp * 2 - pg * 2) / 3);
+    for (let i = 0; i < 3; i++) draw_ai_pod(i + 2, hp + i * (pw + pg), py, pw, ph);
 
+    const my = py + ph + vp;
+    const ccx = W - hp - (cc_w * 5 + cc_g * 4);
+    const pot_w = Math.max(s2 ? 220 : 92, ccx - hp - (s2 ? 16 : 6));
+
+    cv.rect(hp, my, pot_w, cc_h, COL_FELT_DARK, true, s2 ? 8 : 5);
+    cv.rect(hp, my, pot_w, cc_h, COL_FELT_LINE, false, s2 ? 8 : 5);
+    const ptx = hp + (s2 ? 14 : 5);
+    cv.text(ptx, my + (s2 ? 8 : 4), "TOTAL POT", C.sub, f_xs);
+    cv.text(ptx, my + (s2 ? (10 + lh_xs) : 16), `$${I(pot)}`, COL_GOLD, f_lg);
+
+    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
+    const call_str = state === "done" ? "HAND OVER" : (to_call > 0 ? `TO CALL: $${to_call}` : "CHECK OK");
+    cv.text(ptx, my + cc_h - lh_xs - (s2 ? 8 : 3), call_str, C.accent, f_xs);
+
+    draw_board_row(ccx, my, s2 ? 8 : 3);
+
+    const hy = my + cc_h + vp, p = seats[0];
+    const hcw = s2 ? p_cw : 34, hcs = s2 ? (hcw + 8) : 36;
+    if (p.cards.length === 2) {
+      draw_card_box(hp, hy, hcw, p_ch, p.cards[0], false);
+      draw_card_box(hp + hcs, hy, hcw, p_ch, p.cards[1], false);
+    }
+
+    const ix = hp + hcs + hcw + (s2 ? 16 : 6);
+    const iw = W - ix - hp, ih = p_ch - (s2 ? 0 : 4), iy = hy + (s2 ? 0 : 2);
+    if (state === "done" && banner_title) {
+      cv.rect(ix, iy, iw, ih, 0x0D131A, true, 6);
+      cv.rect(ix, iy, iw, ih, banner_col, false, 6);
+      const ty1 = iy + I((ih - (lh_lg + lh_sm)) / 2);
+      cv.text(I(ix + iw / 2 - text_w(banner_title, f_lg) / 2), ty1, banner_title, banner_col, f_lg);
+      cv.text(I(ix + iw / 2 - text_w(banner_sub, f_sm) / 2), ty1 + lh_lg + 2, banner_sub, C.text, f_sm);
+    } else {
+      cv.rect(ix, iy, iw, ih, COL_POD_BG, true, 5);
+      cv.rect(ix, iy, iw, ih, state === "player" ? C.accent : 0x22303C, false, 5);
+      const pin = s2 ? 14 : 6;
       const you_hdr = p.role ? `YOU [${p.role}]  BET $${I(p.street_bet)}` : `YOU  BET $${I(p.street_bet)}`;
-      cv.text(info_x + 6, py + 5, you_hdr, C.text, 11);
+      cv.text(ix + pin, iy + (s2 ? 8 : 3), you_hdr, C.text, f_sm);
 
-      const [, , hname] = eval_best_hand(p.cards, board);
-      const h_str = p.folded ? "FOLDED" : hname;
-      cv.text(info_x + info_w - text_w(h_str, 11) - 6, py + 5, h_str, p.folded ? C.bad : COL_GOLD, 11);
+      const [, , hn] = eval_best_hand(p.cards, board);
+      const hs = p.folded ? "FOLDED" : hn;
+      cv.text(ix + iw - text_w(hs, f_sm) - pin, iy + (s2 ? 8 : 3), hs, p.folded ? C.bad : COL_GOLD, f_sm);
 
       const line2 = state === "player" ? `RAISE TARGET: $${I(raise_to)}  [Up/Down]` : (p.status ? `STATUS: ${p.status}` : "WAITING FOR TABLE...");
-      cv.text(info_x + 6, py + 19, line2, C.accent, 10);
-      cv.text(info_x + 6, py + 32, "[F]Fold  [C]Call/Chk  [R]Raise  [A]All-In", C.sub, 10);
+      cv.text(ix + pin, iy + I((ih - lh_xs) / 2) + 1, line2, C.accent, f_xs);
+      cv.text(ix + pin, iy + ih - lh_xs - (s2 ? 6 : 1), "[F]Fold  [C]Call/Chk  [R]Raise  [A]All-In", C.sub, f_xs);
     }
   }
 
+  // Bottom action bar with responsive weighted buttons
   const by = H - bot_h;
   cv.rect(0, by, W, bot_h, COL_BOTBAR, true);
   cv.line(0, by, W, by, 0x1F2933, 1);
 
   const nb = active_btns.length;
   if (nb > 0) {
-    const gap = nb >= 5 ? 3 : 4, avail_w = W - gap * (nb + 1), bh = bot_h - 6;
+    const g = (!s2 && nb >= 5) ? 3 : gap;
+    const pv = s2 ? 8 : 3, bf = s2 ? f_md : f_sm, br = s2 ? 8 : 4, mp = s2 ? 20 : 8;
+    const avw = W - g * (nb + 1), bh = bot_h - pv * 2, blh = text_h(bf);
     const weights = [], tws = [];
     let total_wt = 0, widest_i = 0;
     for (let i = 0; i < nb; i++) {
       const b = active_btns[i];
-      const tw = text_w(b.label, 11);
-      const wt = Math.max(b.weight || 60, tw + 8);
+      const tw = text_w(b.label, bf);
+      const wt = Math.max(b.weight || 60, tw + mp);
       weights.push(wt);
       tws.push(tw);
       total_wt += wt;
@@ -1116,23 +1471,27 @@ function draw_screen() {
     const bws = [];
     let used_w = 0;
     for (let i = 0; i < nb; i++) {
-      bws.push(I((avail_w * weights[i]) / total_wt));
+      bws.push(I((avw * weights[i]) / total_wt));
       used_w += bws[i];
     }
-    if (used_w < avail_w) bws[widest_i] += (avail_w - used_w);
+    if (used_w < avw) bws[widest_i] += (avw - used_w);
 
-    let cur_bx = gap;
+    let cur_bx = g;
     for (let i = 0; i < nb; i++) {
-      const b = active_btns[i], bw = bws[i], bx = cur_bx, bby = by + 3;
-      cur_bx += bw + gap;
+      const b = active_btns[i], bw = bws[i], bx = cur_bx, bby = by + pv;
+      cur_bx += bw + g;
       b.x = bx; b.y = bby; b.w = bw; b.h = bh;
       const bg = !b.enabled ? COL_BTN_DIS : (b.primary ? COL_BTN_ACT : COL_BTN);
-      cv.rect(bx, bby, bw, bh, bg, true, 4);
-      if (i + 1 === focus_idx && b.enabled) cv.rect(bx, bby, bw, bh, b.primary ? COL_GOLD : C.accent, false, 4);
-      else if (b.enabled) cv.rect(bx, bby, bw, bh, 0x2B3642, false, 4);
+      const fg = b.enabled ? ((i + 1 === focus_idx) ? (b.primary ? COL_GOLD : C.accent) : 0x2B3642) : null;
+      cv.rect(bx, bby, bw, bh, bg, true, br);
+      if (fg) cv.rect(bx, bby, bw, bh, fg, false, br);
+      let lbl = b.label, tw = tws[i];
+      if (tw > bw - 6 && lbl.includes(" [")) {
+        lbl = lbl.replace(/ \[.*\]/, "");
+        tw = text_w(lbl, bf);
+      }
       const tcol = !b.enabled ? COL_TEXT_DIM : (b.primary ? COL_GOLD : C.text);
-      const tw = tws[i];
-      cv.text(bx + Math.max(2, I((bw - tw) / 2)), bby + I((bh - 11) / 2), b.label, tcol, 11);
+      cv.text(bx + Math.max(2, I((bw - tw) / 2)), bby + Math.max(1, I((bh - blh) / 2)), lbl, tcol, bf);
     }
   }
 }
@@ -1147,25 +1506,68 @@ function cycle_focus(dir) {
   draw_screen();
 }
 
+function switchDevice(key) {
+  currentDev = DEVICES[key];
+  W = currentDev.w;
+  H = currentDev.h;
+
+  document.querySelectorAll('.dev-pill').forEach(el => el.classList.remove('active'));
+  if (event && event.target) {
+    event.target.classList.add('active');
+  }
+
+  document.getElementById('bezel-name').innerText = currentDev.name.toUpperCase();
+  document.getElementById('bezel-spec').innerText = currentDev.spec;
+  document.getElementById('device-shell').style.width = currentDev.shellW + 'px';
+
+  const screenWrap = document.getElementById('screen-wrap');
+  screenWrap.style.width = W + 'px';
+
+  canvas.width = W;
+  canvas.height = H;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+
+  const kbdEl = document.getElementById('device-kbd');
+  const navZone = document.getElementById('nav-zone');
+  if (kbdEl && navZone) {
+    kbdEl.style.display = currentDev.hasKbd ? 'flex' : 'none';
+    navZone.style.display = currentDev.hasKbd ? 'flex' : 'none';
+  }
+
+  compute_layout();
+  rebuild_buttons();
+  draw_screen();
+}
+
+// Touch & Click Event Handling
 canvas.addEventListener('mousedown', e => {
   const r = canvas.getBoundingClientRect();
-  const ex = (e.clientX - r.left) * (W / r.width);
-  const ey = (e.clientY - r.top) * (H / r.height);
+  const scaleX = canvas.width / r.width;
+  const scaleY = canvas.height / r.height;
+  const ex = (e.clientX - r.left) * scaleX;
+  const ey = (e.clientY - r.top) * scaleY;
+
   for (let i = 0; i < active_btns.length; i++) {
     const b = active_btns[i];
     if (ex >= b.x && ex <= b.x + b.w && ey >= b.y && ey <= b.y + b.h) {
-      if (b.enabled) { focus_idx = i + 1; b.fn(); }
+      if (b.enabled) {
+        focus_idx = i + 1;
+        b.fn();
+      }
       return;
     }
   }
-  if (ey <= 20 && ex >= W - 64) {
+
+  if (ey <= top_h && ex >= W - 70) {
     sound_on = !sound_on;
     showToast(sound_on ? "Sound ON" : "Sound OFF");
     draw_screen();
     return;
   }
+
   if (state === "ai") { on_tick(); return; }
-  if ((state === "done" || state === "title") && ey > 22 && ey < H - 32) start_hand();
+  if ((state === "done" || state === "title") && ey > top_h && ey < H - bot_h) start_hand();
 });
 
 function sendSwipe(dir) {
@@ -1204,12 +1606,26 @@ function sendKey(k) {
   }
 }
 
+// On-screen keyboard keys click support
+document.querySelectorAll('.key').forEach(el => {
+  el.addEventListener('click', () => {
+    const k = el.getAttribute('data-k');
+    if (k) {
+      el.classList.add('pressed');
+      setTimeout(() => el.classList.remove('pressed'), 120);
+      sendKey(k);
+    }
+  });
+});
+
 window.addEventListener('keydown', e => {
-  const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', ' ': ' ' };
+  const map = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', ' ': ' ', Escape: 'escape' };
   if (map[e.key]) { e.preventDefault(); sendKey(map[e.key]); }
   else if (e.key.length === 1) sendKey(e.key);
 });
 
+// Initial boot
+compute_layout();
 build_deck();
 rebuild_buttons();
 draw_screen();

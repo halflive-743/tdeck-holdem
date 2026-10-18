@@ -137,6 +137,14 @@
       "desc": "No-Limit Texas Hold'em Poker (4-Max vs 3 AI bots) with blinds, side pots, live hand evaluator, and auto-scaling UI for T-Deck & T-Display P4 (AMOLED/LCD).",
       "icon": "game",
       "seed": false
+    },
+    {
+      "id": "checkers",
+      "name": "Checkers",
+      "ver": "1.0",
+      "desc": "Classic 8x8 Checkers (Draughts) vs HAL AI with 2-Player pass-and-play, multi-jumps, king promotions, keyboard/touch controls, and persistent stats.",
+      "icon": "game",
+      "seed": false
     }
   ]
 }
