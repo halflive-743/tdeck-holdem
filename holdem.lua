@@ -48,13 +48,10 @@ elseif l>=700 or s>=460 then dname,s2="Large HD",true
 else dname,s2=(W>=440 and H<320)and"Wide Compact"or((port and W<=260)and"Compact Portrait"or"T-Deck"),false end
 if s2 then f_xs,f_sm,f_md,f_lg,f_xl,f_rk=14,14,16,20,24,16 else f_xs,f_sm,f_md,f_lg,f_xl,f_rk=10,11,12,14,16,12 end
 lh_xs,lh_sm,lh_md,lh_lg,lh_xl=th(f_xs),th(f_sm),th(f_md),th(f_lg),th(f_xl)
-if s2 then top_h,bot_h,pad,gap=I(max(lh_md+16,40)),port and I(max(lh_md+42,72))or I(max(lh_md+26,54)),14,8
+if s2 then top_h,bot_h,pad,gap=I(max(lh_md+16,40)),I(max(lh_md+26,54)),14,8
 else top_h,bot_h,pad,gap=20,30,6,4 end
 tbl_h=max(80,H-top_h-bot_h)
-if port and s2 then
-cc_g=10;cc_w=I(clp((W-36-cc_g*4)/5,86,98));cc_h=I(cc_w*1.4)
-p_cw=I(clp(W*0.175,92,104));p_ch=I(p_cw*1.4);p_sm,p_lg=6,13
-elseif s2 then
+if s2 then
 cc_h=I(clp(tbl_h*0.3,88,120));cc_w=I(cc_h*0.74);cc_g,p_cw,p_ch,p_sm,p_lg=12,cc_w,cc_h,5,11
 elseif port then
 cc_g=4;cc_w=I(clp((W-16-cc_g*4)/5,34,40));cc_h=I(clp(cc_w*1.32,44,52));p_cw,p_ch,p_sm,p_lg=35,46,3,5
@@ -237,7 +234,7 @@ if not p.fold and not p.all and p.stack>0 and(not p.act or p.sb<c_bet)then
 if can==1 and p.sb>=c_bet then break end
 trn_s=nxt
 if p.hum then timer.stop();state="player";sync_r();rebuild_btns();draw_screen()
-else state="ai";rebuild_btns();draw_screen();timer.every(420)end
+else state="ai";rebuild_btns();draw_screen();timer.every(3780)end
 return
 end
 end
@@ -316,6 +313,7 @@ local function cyc_bl()b_idx=(b_idx%#BLINDS)+1;local sb,bb=blinds();sys.toast(fm
 local function rst_tbl()for i=1,4 do seats[i].stack=S0 end;sys.toast("New $500 Table");sfx();start_hand()end
 rebuild_btns=function()
 btns={};local sb,bb=blinds();local cmp=(W<280)
+if port and s2 then btns={{label="ROTATE TO LANDSCAPE",w=W-32,enabled=false}};f_idx=1;return end
 if state=="title"then
 btns={
 {label=fmt("BLINDS $%d/$%d",sb,bb),w=96,enabled=true,fn=cyc_bl},
@@ -462,22 +460,25 @@ local ms=(state=="title")and fmt("BLINDS $%d/$%d",sb,bb)or fmt("%s · $%d/$%d",S
 local mx=I((W-tw(ms,tf))/2);cv:text(mx,ty,ms,C.accent,tf)
 local ps=fmt("PEAK $%d%s",I(best_b),snd and""or" [M]")
 cv:text(max(mx+tw(ms,tf)+6,W-tw(ps,tf)-pad),ty,ps,C.sub,tf)
+if port and s2 then
+local px,py=16,top_h+16;local bw,bh=W-px*2,tbl_h-py*2
+box(px,py,bw,bh,K_FDK,C.accent,12)
+local my=py+I(bh*0.28)
+tcx(cx,my,"[ ROTATE DEVICE ]",K_GLD,f_xl)
+tcx(cx,my+lh_xl+14,TIT_T,C.text,f_lg)
+tcx(cx,my+lh_xl+lh_lg+24,"Texas Hold'em requires horizontal screen play.",C.sub,f_sm)
+tcx(cx,my+lh_xl+lh_lg+lh_sm+34,"Please rotate your device to Landscape.",K_GLD,f_sm)
+tcx(cx,my+lh_xl+lh_lg+lh_sm*2+46,"(Settings > Display > Orientation > Landscape)",C.sub,f_xs)
+local by=H-bot_h;box(0,by,W,bot_h,K_BAR)
+local bw_b,bh_b=W-32,bot_h-12;local bx,bby=16,by+6
+box(bx,bby,bw_b,bh_b,K_BDS,nil,6)
+tcx(cx,bby+I((bh_b-lh_sm)/2),"ROTATE TO LANDSCAPE TO PLAY",K_DIM,f_sm)
+return
+end
 if state=="title"then
 local px,py=s2 and 20 or 12,s2 and 16 or 8;local bw,bh,by=W-px*2,tbl_h-py*2,top_h+py
 box(px,by,bw,bh,K_FDK,K_FLN,s2 and 12 or 8)
 local pl=fmt("BLINDS: $%d / $%d   BUY-IN: $%d",sb,bb,I(seats[1].stack))
-if port and s2 then
-local cy=by+I(bh*0.07)
-tcx(cx,cy,TIT_T,K_GLD,f_xl);cy=cy+lh_xl+10
-tcx(cx,cy,SUB_T,C.sub,f_sm);cy=cy+lh_sm+6
-tcx(cx,cy,fmt("%s  (%dx%d)",dname,W,H),K_FLN,f_sm);cy=cy+lh_sm+I(bh*0.05)
-cbox(cx-p_cw-12,cy,p_cw,p_ch,{r=1,s=1},false);cbox(cx+12,cy,p_cw,p_ch,{r=1,s=2},false)
-cy=cy+p_ch+I(bh*0.06);local pw,ph=tw(pl,f_lg),lh_lg+24
-box(cx-I((pw+48)/2),cy,pw+48,ph,K_BAC,C.accent,10);tcx(cx,cy+I((ph-lh_lg)/2),pl,C.text,f_lg);cy=cy+ph+I(bh*0.05)
-local pct=h_play>0 and I((h_won*100)/h_play)or 0
-tcx(cx,cy,fmt("Hands Played: %d   ·   Won: %d (%d%%)",I(h_play),I(h_won),pct),C.sub,f_sm)
-tcx(cx,by+bh-lh_sm-18,"Tap [DEAL HOLD'EM] below to start a hand",C.sub,f_sm)
-else
 local dw,dh=s2 and 64 or 32,s2 and 90 or 44
 if W>=280 then cbox(px+10,by+10,dw,dh,{r=1,s=1},false,s2 and 4 or 3,s2 and 9 or 5);cbox(W-px-dw-10,by+10,dw,dh,{r=1,s=2},false,s2 and 4 or 3,s2 and 9 or 5)end
 tcx(cx,by+10,TIT_T,K_GLD,f_xl);local t2y=by+14+lh_xl
@@ -487,29 +488,6 @@ local p_y=max(t2y+lh_sm+8,I(by+(bh-ph)*0.54))
 box(cx-I(plw/2),p_y,plw,ph,K_BAC,C.accent,5);tcx(cx,p_y+I((ph-lh_md)/2),pl,C.text,f_md)
 local hy=by+bh-lh_sm-(s2 and 12 or 6)
 if hy>p_y+ph+4 then tcx(cx,hy,W>=300 and"Tap [DEAL HOLD'EM] or press [D] to play"or"Tap [DEAL] below to play",C.sub,f_sm)end
-end
-elseif port and s2 then
-local px,pg,ph,py=16,10,126,top_h+16;local pw=I((W-px*2-pg*2)/3)
-for i=0,2 do ai_pod(i+2,px+i*(pw+pg),py,pw,ph)end
-local pby,pbh=py+ph+22,68;box(px,pby,W-px*2,pbh,K_FDK,K_FLN,10)
-cv:text(px+18,pby+I((pbh-lh_xl)/2),fmt("TOTAL POT: $%d",I(pot)),K_GLD,f_xl)
-local tc=I(max(0,c_bet-seats[1].sb))
-local cs=(state=="done")and"HAND COMPLETE"or(tc>0 and fmt("TO CALL: $%d",tc)or"CHECK AVAILABLE")
-cv:text(W-px-tw(cs,f_md)-18,pby+I((pbh-lh_md)/2),cs,C.accent,f_md)
-local ccy=pby+pbh+24;brow(I((W-(cc_w*5+cc_g*4))/2),ccy,8)
-local p,pih,piy=seats[1],98,top_h+tbl_h-114
-local pcy=piy-p_ch-18;local mcy=I((ccy+cc_h+pcy)/2)
-if state=="done"and b_tit~=""then
-local bw,bh=W-px*2-24,lh_xl+lh_md+28;local by=I(mcy-bh/2)
-box(cx-I(bw/2),by,bw,bh,0x0D131A,b_col,10);tcx(cx,by+8,b_tit,b_col,f_xl);tcx(cx,by+12+lh_xl,b_sub,C.text,f_md)
-else cv:line(px+24,mcy,W-px-24,mcy,K_FLN,1)end
-if#p.cards==2 then cbox(cx-p_cw-9,pcy,p_cw,p_ch,p.cards[1],false);cbox(cx+9,pcy,p_cw,p_ch,p.cards[2],false)end
-box(px,piy,W-px*2,pih,K_POD,state=="player"and C.accent or 0x22303C,10)
-cv:text(px+16,piy+10,p.role~=""and fmt("YOU [%s]  ·  STREET BET: $%d",p.role,I(p.sb))or fmt("YOU  ·  STREET BET: $%d",I(p.sb)),C.text,f_md)
-local _,_,hn=eval_hand(p.cards,board);local hs=p.fold and"FOLDED"or hn
-cv:text(W-px-tw(hs,f_md)-16,piy+10,hs,p.fold and C.bad or K_GLD,f_md)
-cv:text(px+16,piy+14+lh_md,(state=="player")and fmt("RAISE TARGET: $%d   (Tap +BB or Up/Down)",I(r_to))or(p.st~=""and("STATUS: "..p.st)or"WAITING FOR TABLE..."),C.accent,f_sm)
-cv:text(px+16,piy+18+lh_md+lh_sm,"Touch action buttons below  ·  Tap table after hand to deal",C.sub,f_sm)
 elseif port then
 local py,pw=top_h+4,I((W-16)/3);for i=0,2 do ai_pod(i+2,4+i*(pw+4),py,pw,40)end
 local sy=py+43;local tc=I(max(0,c_bet-seats[1].sb))
@@ -604,7 +582,7 @@ local p=seats[trn_s]
 if p and not p.hum and not p.fold and not p.all then ai_go(trn_s)else adv_turn()end
 end
 function app.on_input(ev)
-if not ev then return end
+if not ev or(port and s2)then return end
 if ev.type=="down"then
 local ex,ey=tonumber(ev.x)or 0,tonumber(ev.y)or 0
 for i=1,#btns do

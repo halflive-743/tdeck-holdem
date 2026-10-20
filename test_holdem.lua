@@ -126,9 +126,7 @@ local devices = {
   { name = "LilyGo T-Deck",                     w = 320,  h = 208  },
   { name = "Heltec V4 Portrait",                w = 240,  h = 244  },
   { name = "LilyGo T-LoRa Pager",               w = 480,  h = 178  },
-  { name = "LilyGo T-Display P4 LCD (Port)",    w = 540,  h = 1102 },
   { name = "LilyGo T-Display P4 LCD (Land)",    w = 1168, h = 474  },
-  { name = "LilyGo T-Display P4 AMOLED (Port)", w = 568,  h = 1166 },
   { name = "LilyGo T-Display P4 AMOLED (Land)", w = 1232, h = 502  },
 }
 
@@ -179,4 +177,18 @@ for _, dev in ipairs(devices) do
   assert(type(storekv.he_best) == "number", "best bankroll must persist as number")
   print(string.format("OK %-34s (%4dx%-4d): tiles=%d max_instr=%5d draw_ops=%5d stack=$%d",
     dev.name, dev.w, dev.h, #canvases, max_instr, draw_ops, storekv.he_bank))
+end
+
+local port_devices = {
+  { name = "LilyGo T-Display P4 LCD (Port)",    w = 540,  h = 1102 },
+  { name = "LilyGo T-Display P4 AMOLED (Port)", w = 568,  h = 1166 },
+}
+for _, dev in ipairs(port_devices) do
+  _G.wada = mock_wada(dev.w, dev.h)
+  local app = dofile("holdem.lua")
+  app.on_open(dev.w, dev.h)
+  verify_canvas_coverage(dev.w, dev.h)
+  app.on_close()
+  print(string.format("OK %-34s (%4dx%-4d): tiles=%d [ROTATE PROMPT VERIFIED]",
+    dev.name, dev.w, dev.h, #canvases))
 end

@@ -289,17 +289,15 @@
 
 <header>
   <h1>WADAMESH <span>TEXAS HOLD'EM</span></h1>
-  <p>Multi-Device Hardware & Audio Simulator (Lua 5.4 · v1.1)</p>
+  <p>Multi-Device Hardware & Audio Simulator (Lua 5.4 · v1.3)</p>
 </header>
 
 <div class="device-bar">
   <div class="dev-pill active" onclick="switchDevice('tdeck')">LilyGo T-Deck (320×208)</div>
   <div class="dev-pill" onclick="switchDevice('heltec')">Heltec V4 (240×244)</div>
   <div class="dev-pill" onclick="switchDevice('pager')">T-LoRa Pager (480×178)</div>
-  <div class="dev-pill" onclick="switchDevice('p4_land')">T-Display P4 LCD Land (1168×474)</div>
-  <div class="dev-pill" onclick="switchDevice('p4_port')">T-Display P4 LCD Port (540×1102)</div>
-  <div class="dev-pill" onclick="switchDevice('p4_amoled_land')">T-Display P4 AMOLED Land (1232×502)</div>
-  <div class="dev-pill" onclick="switchDevice('p4_amoled_port')">T-Display P4 AMOLED Port (568×1166)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_land')">T-Display P4 LCD (1168×474)</div>
+  <div class="dev-pill" onclick="switchDevice('p4_amoled_land')">T-Display P4 AMOLED (1232×502)</div>
 </div>
 
 <div class="tdeck-device" id="device-shell">
@@ -311,7 +309,7 @@
   <div class="screen-wrap" id="screen-wrap">
     <div class="wada-bar">
       <span class="back">&lt; Apps</span>
-      <span style="font-weight:700;">Texas Hold'em v1.1</span>
+      <span style="font-weight:700;">Texas Hold'em v1.3</span>
       <span class="sys">CH 0 · 100%</span>
     </div>
     <canvas id="screen" width="320" height="208"></canvas>
@@ -371,10 +369,8 @@ const DEVICES = {
   tdeck:          { name: "LilyGo T-Deck",              spec: "320×208 · MESHCORE",     w: 320,  h: 208,  shellW: 368,  hasKbd: true  },
   heltec:         { name: "Heltec V4",                 spec: "240×244 · TFT PORTRAIT", w: 240,  h: 244,  shellW: 288,  hasKbd: false },
   pager:          { name: "LilyGo T-LoRa Pager",        spec: "480×178 · KEYPAD WIDE",   w: 480,  h: 178,  shellW: 528,  hasKbd: true  },
-  p4_land:        { name: "T-Display P4 LCD (Land)",    spec: "1168×474 · HI8561 LCD",   w: 1168, h: 474,  shellW: 1210, hasKbd: false },
-  p4_port:        { name: "T-Display P4 LCD (Port)",    spec: "540×1102 · HI8561 LCD",   w: 540,  h: 1102, shellW: 580,  hasKbd: false },
-  p4_amoled_land: { name: "T-Display P4 AMOLED (Land)", spec: "1232×502 · RM69A10 AMOLED",w: 1232, h: 502,  shellW: 1274, hasKbd: false },
-  p4_amoled_port: { name: "T-Display P4 AMOLED (Port)", spec: "568×1166 · RM69A10 AMOLED",w: 568,  h: 1166, shellW: 608,  hasKbd: false }
+  p4_land:        { name: "T-Display P4 LCD",           spec: "1168×474 · HORIZONTAL / LANDSCAPE", w: 1168, h: 474, shellW: 1210, hasKbd: false },
+  p4_amoled_land: { name: "T-Display P4 AMOLED",        spec: "1232×502 · HORIZONTAL / LANDSCAPE", w: 1232, h: 502, shellW: 1274, hasKbd: false }
 };
 
 let currentDev = DEVICES.tdeck;
@@ -759,7 +755,7 @@ function advance_turn() {
           state = "ai";
           rebuild_buttons();
           draw_screen();
-          aiTimer = setTimeout(() => on_tick(), 420);
+          aiTimer = setTimeout(() => on_tick(), 3780);
         }
         return;
       }
@@ -1210,14 +1206,7 @@ function compute_layout() {
   }
   tbl_h = Math.max(80, H - top_h - bot_h);
 
-  if (port && s2) {
-    cc_g = 10;
-    cc_w = clamp(Math.floor((W - 36 - cc_g * 4) / 5), 86, 98);
-    cc_h = Math.floor(cc_w * 1.4);
-    p_cw = clamp(Math.floor(W * 0.175), 92, 104);
-    p_ch = Math.floor(p_cw * 1.4);
-    p_sm = 6; p_lg = 13;
-  } else if (s2) {
+  if (s2) {
     cc_h = clamp(Math.floor(tbl_h * 0.3), 88, 120);
     cc_w = Math.floor(cc_h * 0.74);
     cc_g = 12; p_cw = cc_w; p_ch = cc_h;
@@ -1254,6 +1243,23 @@ function draw_screen() {
   const ps = `PEAK $${I(best_bank)}${sound_on ? "" : " [M]"}`;
   cv.text(Math.max(mx + text_w(ms, tf) + 6, W - text_w(ps, tf) - pad), ty, ps, C.sub, tf);
 
+  if (port && s2) {
+    const px = 16, py = top_h + 16, bw = W - px * 2, bh = tbl_h - py * 2;
+    cv.rect(px, py, bw, bh, COL_FELT_DARK, true, 12);
+    cv.rect(px, py, bw, bh, C.accent, false, 12);
+    const my = py + I(bh * 0.28);
+    cv.text(I(cx - text_w("[ ROTATE DEVICE ]", f_xl) / 2), my, "[ ROTATE DEVICE ]", COL_GOLD, f_xl);
+    cv.text(I(cx - text_w("TEXAS HOLD'EM", f_lg) / 2), my + lh_xl + 14, "TEXAS HOLD'EM", C.text, f_lg);
+    cv.text(I(cx - text_w("Texas Hold'em requires horizontal screen play.", f_sm) / 2), my + lh_xl + lh_lg + 24, "Texas Hold'em requires horizontal screen play.", C.sub, f_sm);
+    cv.text(I(cx - text_w("Please rotate your device to Landscape.", f_sm) / 2), my + lh_xl + lh_lg + lh_sm + 34, "Please rotate your device to Landscape.", COL_GOLD, f_sm);
+    cv.text(I(cx - text_w("(Settings > Display > Orientation > Landscape)", f_xs) / 2), my + lh_xl + lh_lg + lh_sm * 2 + 46, "(Settings > Display > Orientation > Landscape)", C.sub, f_xs);
+    const by_b = H - bot_h; cv.rect(0, by_b, W, bot_h, COL_BOTBAR, true);
+    const bw_b = W - 32, bh_b = bot_h - 12, bx_b = 16, bby = by_b + 6;
+    cv.rect(bx_b, bby, bw_b, bh_b, COL_BTN_DIS, true, 6);
+    cv.text(I(cx - text_w("ROTATE TO LANDSCAPE TO PLAY", f_sm) / 2), bby + I((bh_b - lh_sm) / 2), "ROTATE TO LANDSCAPE TO PLAY", COL_TEXT_DIM, f_sm);
+    return;
+  }
+
   if (state === "title") {
     const px = s2 ? 20 : 12, py = s2 ? 16 : 8;
     const bw = W - px * 2, bh = tbl_h - py * 2, by = top_h + py;
@@ -1261,103 +1267,26 @@ function draw_screen() {
     cv.rect(px, by, bw, bh, COL_FELT_LINE, false, s2 ? 12 : 8);
     const pl = `BLINDS: $${sb} / $${bb}   BUY-IN: $${I(seats[0].stack)}`;
 
-    if (port && s2) {
-      let cy = by + I(bh * 0.07);
-      cv.text(I(cx - text_w("TEXAS HOLD'EM", f_xl) / 2), cy, "TEXAS HOLD'EM", COL_GOLD, f_xl);
-      cy += lh_xl + 10;
-      cv.text(I(cx - text_w("No-Limit 4-Max  ·  3 AI Opponents", f_sm) / 2), cy, "No-Limit 4-Max  ·  3 AI Opponents", C.sub, f_sm);
-      cy += lh_sm + 6;
-      const dstr = `${dname}  (${W}x${H})`;
-      cv.text(I(cx - text_w(dstr, f_sm) / 2), cy, dstr, COL_FELT_LINE, f_sm);
-      cy += lh_sm + I(bh * 0.05);
-
-      draw_card_box(cx - p_cw - 12, cy, p_cw, p_ch, { r: 1, s: 1 }, false);
-      draw_card_box(cx + 12, cy, p_cw, p_ch, { r: 1, s: 2 }, false);
-      cy += p_ch + I(bh * 0.06);
-
-      const pw = text_w(pl, f_lg), ph = lh_lg + 24;
-      cv.rect(cx - I((pw + 48) / 2), cy, pw + 48, ph, COL_BTN_ACT, true, 10);
-      cv.rect(cx - I((pw + 48) / 2), cy, pw + 48, ph, C.accent, false, 10);
-      cv.text(cx - I(pw / 2), cy + I((ph - lh_lg) / 2), pl, C.text, f_lg);
-      cy += ph + I(bh * 0.05);
-
-      const pct = hands_played > 0 ? I((hands_won * 100) / hands_played) : 0;
-      const stat_str = `Hands Played: ${I(hands_played)}   ·   Won: ${I(hands_won)} (${pct}%)`;
-      cv.text(I(cx - text_w(stat_str, f_sm) / 2), cy, stat_str, C.sub, f_sm);
-
-      const deal_hint = "Tap [DEAL HOLD'EM] below to start a hand";
-      cv.text(I(cx - text_w(deal_hint, f_sm) / 2), by + bh - lh_sm - 18, deal_hint, C.sub, f_sm);
-    } else {
-      const dw = s2 ? 64 : 32, dh = s2 ? 90 : 44;
-      if (W >= 280) {
-        draw_card_box(px + 10, by + 10, dw, dh, { r: 1, s: 1 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
-        draw_card_box(W - px - dw - 10, by + 10, dw, dh, { r: 1, s: 2 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
-      }
-      cv.text(I(cx - text_w("TEXAS HOLD'EM", f_xl) / 2), by + 10, "TEXAS HOLD'EM", COL_GOLD, f_xl);
-      const t2y = by + 14 + lh_xl;
-      cv.text(I(cx - text_w("No-Limit 4-Max  ·  3 AI Opponents", f_sm) / 2), t2y, "No-Limit 4-Max  ·  3 AI Opponents", C.sub, f_sm);
-
-      const pw = text_w(pl, f_md), ph = lh_md + (s2 ? 16 : 8), plw = pw + (s2 ? 36 : 20);
-      const p_y = Math.max(t2y + lh_sm + 8, I(by + (bh - ph) * 0.54));
-      cv.rect(cx - I(plw / 2), p_y, plw, ph, COL_BTN_ACT, true, 5);
-      cv.rect(cx - I(plw / 2), p_y, plw, ph, C.accent, false, 5);
-      cv.text(cx - I(pw / 2), p_y + I((ph - lh_md) / 2), pl, C.text, f_md);
-
-      const hy = by + bh - lh_sm - (s2 ? 12 : 6);
-      if (hy > p_y + ph + 4) {
-        const hint = W >= 300 ? "Tap [DEAL HOLD'EM] or press [D] to play" : "Tap [DEAL] below to play";
-        cv.text(I(cx - text_w(hint, f_sm) / 2), hy, hint, C.sub, f_sm);
-      }
+    const dw = s2 ? 64 : 32, dh = s2 ? 90 : 44;
+    if (W >= 280) {
+      draw_card_box(px + 10, by + 10, dw, dh, { r: 1, s: 1 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
+      draw_card_box(W - px - dw - 10, by + 10, dw, dh, { r: 1, s: 2 }, false, s2 ? 4 : 3, s2 ? 9 : 5);
     }
-  } else if (port && s2) {
-    // T-Display P4 Portrait Mode
-    const px = 16, pg = 10, ph = 126, py = top_h + 16;
-    const pw = I((W - px * 2 - pg * 2) / 3);
-    for (let i = 0; i < 3; i++) draw_ai_pod(i + 2, px + i * (pw + pg), py, pw, ph);
+    cv.text(I(cx - text_w("TEXAS HOLD'EM", f_xl) / 2), by + 10, "TEXAS HOLD'EM", COL_GOLD, f_xl);
+    const t2y = by + 14 + lh_xl;
+    cv.text(I(cx - text_w("No-Limit 4-Max  ·  3 AI Opponents", f_sm) / 2), t2y, "No-Limit 4-Max  ·  3 AI Opponents", C.sub, f_sm);
 
-    const pby = py + ph + 22, pbh = 68;
-    cv.rect(px, pby, W - px * 2, pbh, COL_FELT_DARK, true, 10);
-    cv.rect(px, pby, W - px * 2, pbh, COL_FELT_LINE, false, 10);
-    cv.text(px + 18, pby + I((pbh - lh_xl) / 2), `TOTAL POT: $${I(pot)}`, COL_GOLD, f_xl);
+    const pw = text_w(pl, f_md), ph = lh_md + (s2 ? 16 : 8), plw = pw + (s2 ? 36 : 20);
+    const p_y = Math.max(t2y + lh_sm + 8, I(by + (bh - ph) * 0.54));
+    cv.rect(cx - I(plw / 2), p_y, plw, ph, COL_BTN_ACT, true, 5);
+    cv.rect(cx - I(plw / 2), p_y, plw, ph, C.accent, false, 5);
+    cv.text(cx - I(pw / 2), p_y + I((ph - lh_md) / 2), pl, C.text, f_md);
 
-    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
-    const cs = state === "done" ? "HAND COMPLETE" : (to_call > 0 ? `TO CALL: $${to_call}` : "CHECK AVAILABLE");
-    cv.text(W - px - text_w(cs, f_md) - 18, pby + I((pbh - lh_md) / 2), cs, C.accent, f_md);
-
-    const ccy = pby + pbh + 24;
-    draw_board_row(I((W - (cc_w * 5 + cc_g * 4)) / 2), ccy, 8);
-
-    const p = seats[0], pih = 98, piy = top_h + tbl_h - 114;
-    const pcy = piy - p_ch - 18, mcy = I((ccy + cc_h + pcy) / 2);
-
-    if (state === "done" && banner_title) {
-      const bw = W - px * 2 - 24, bh = lh_xl + lh_md + 28, by = I(mcy - bh / 2);
-      cv.rect(cx - I(bw / 2), by, bw, bh, 0x0D131A, true, 10);
-      cv.rect(cx - I(bw / 2), by, bw, bh, banner_col, false, 10);
-      cv.text(I(cx - text_w(banner_title, f_xl) / 2), by + 8, banner_title, banner_col, f_xl);
-      cv.text(I(cx - text_w(banner_sub, f_md) / 2), by + 12 + lh_xl, banner_sub, C.text, f_md);
-    } else {
-      cv.line(px + 24, mcy, W - px - 24, mcy, COL_FELT_LINE, 1);
+    const hy = by + bh - lh_sm - (s2 ? 12 : 6);
+    if (hy > p_y + ph + 4) {
+      const hint = W >= 300 ? "Tap [DEAL HOLD'EM] or press [D] to play" : "Tap [DEAL] below to play";
+      cv.text(I(cx - text_w(hint, f_sm) / 2), hy, hint, C.sub, f_sm);
     }
-
-    if (p.cards.length === 2) {
-      draw_card_box(cx - p_cw - 9, pcy, p_cw, p_ch, p.cards[0], false);
-      draw_card_box(cx + 9, pcy, p_cw, p_ch, p.cards[1], false);
-    }
-
-    cv.rect(px, piy, W - px * 2, pih, COL_POD_BG, true, 10);
-    cv.rect(px, piy, W - px * 2, pih, state === "player" ? C.accent : 0x22303C, false, 10);
-
-    const you_hdr = p.role ? `YOU [${p.role}]  ·  STREET BET: $${I(p.street_bet)}` : `YOU  ·  STREET BET: $${I(p.street_bet)}`;
-    cv.text(px + 16, piy + 10, you_hdr, C.text, f_md);
-
-    const [, , hn] = eval_best_hand(p.cards, board);
-    const hs = p.folded ? "FOLDED" : hn;
-    cv.text(W - px - text_w(hs, f_md) - 16, piy + 10, hs, p.folded ? C.bad : COL_GOLD, f_md);
-
-    const line2 = state === "player" ? `RAISE TARGET: $${I(raise_to)}   (Tap +BB or Up/Down)` : (p.status ? `STATUS: ${p.status}` : "WAITING FOR TABLE...");
-    cv.text(px + 16, piy + 14 + lh_md, line2, C.accent, f_sm);
-    cv.text(px + 16, piy + 18 + lh_md + lh_sm, "Touch action buttons below  ·  Tap table after hand to deal", C.sub, f_sm);
   } else if (port) {
     // Compact Portrait Mode (Heltec V4)
     const py = top_h + 4, pw = I((W - 16) / 3);
