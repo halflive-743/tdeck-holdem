@@ -1,13 +1,13 @@
 # Texas Hold'em Poker for WADAMESH (Lua 5.4) — T-Deck & T-Display P4 (AMOLED / LCD)
 
-A **No-Limit Texas Hold'em Poker** application built for **LilyGo T-Display P4 (AMOLED & LCD)**, **LilyGo T-Deck**, **Heltec V4**, **T-LoRa Pager**, and other MeshCore / WADAMESH boards using the on-device **WADAMESH Lua App SDK (`wada.*` API v1)**.
+A **No-Limit Texas Hold'em Poker** application built for **LilyGo T-Display P4 (AMOLED & LCD)**, **LilyGo T-Deck**, **T-LoRa Pager**, and other MeshCore / WADAMESH boards using the on-device **WADAMESH Lua App SDK (`wada.*` API v1)**.
 
 ## Project Files
 
 - [`holdem.lua`](holdem.lua) — Standalone Lua app ready to copy to your device.
 - [`holdem.json`](holdem.json) — WADAMESH app drawer / Store manifest.
 - [`deploy/apps/holdem/1.3/`](deploy/apps/holdem/1.3) — Structured for USB serial sideloading (`scripts/sideload_app.py`) or submitting to the WADAMESH Store.
-- [`holdem_simulator.html`](holdem_simulator.html) — Interactive multi-device desktop browser simulator with real-time hardware switcher pills (T-Deck, Heltec V4, T-LoRa Pager, T-Display P4 AMOLED / LCD).
+- [`holdem_simulator.html`](holdem_simulator.html) — Interactive multi-device desktop browser simulator with real-time hardware switcher pills (T-Deck, T-LoRa Pager, T-Display P4 AMOLED / LCD).
 - [`test_holdem.lua`](test_holdem.lua) — Automated SDK constraint, instruction budget, and multi-device verification script.
 
 ---
@@ -21,10 +21,9 @@ A **No-Limit Texas Hold'em Poker** application built for **LilyGo T-Display P4 (
 | **LilyGo T-Display P4 AMOLED** | `1232 × 568` (RM69A10) | `1232 × 502` | **Landscape (Enforced)** | `3 × 2` tiles (`411 × 251`) | `88 × 120` px | `14 / 16 / 20 / 24` |
 | **LilyGo T-Display P4 LCD** | `1168 × 540` (HI8561) | `1168 × 474` | **Landscape (Enforced)** | `3 × 1` tiles (`390 × 474`) | `85 × 116` px | `14 / 16 / 20 / 24` |
 | **LilyGo T-Deck / T-Deck Plus** | `320 × 240` | `320 × 208` | Landscape | `1` canvas (`320 × 208`) | `36 × 47` px | `10 / 11 / 12 / 14 / 16` |
-| **Heltec V4 / Compact Portrait** | `240 × 320` | `240 × 244` | Compact Portrait | `1` canvas (`240 × 244`) | `38 × 50` px | `10 / 11 / 12 / 14 / 16` |
 | **LilyGo T-LoRa Pager** | `480 × 222` | `480 × 178` | Landscape | `1` canvas (`480 × 178`) | `32 × 42` px | `10 / 11 / 12 / 14 / 16` |
 
-> **Note on Rotatable Devices (P4 AMOLED / LCD):** Horizontal screen play is enforced for an optimal 4-Max table layout. If launched in Portrait orientation (`H > W`), the app displays a clear `[ ROTATE DEVICE ]` notification screen prompting the user to set their orientation to Landscape (`Settings > Display > Orientation > Landscape`), disabling action buttons until the device is in horizontal mode. Fixed portrait hardware (Heltec V4) continues to run native compact portrait layout.
+> **Note on Screen Orientation:** Horizontal screen play is enforced for an optimal 4-Max table layout. If launched in Portrait orientation (`H > W`), the app displays a clear `[ ROTATE DEVICE ]` notification screen prompting the user to set their orientation to Landscape (`Settings > Display > Orientation > Landscape`), disabling action buttons until the device is in horizontal mode.
 
 ---
 

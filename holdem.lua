@@ -45,7 +45,7 @@ local s,l=min(W,H),max(W,H);port=(H>W)
 if l>=1185 or(W==568 and H>=900)or(W>=1185 and H>=460)then dname,s2="T-Display P4 AMOLED",true
 elseif(l>=1050 and l<1185)or(W==540 and H>=900)or(W>=500 and W<560 and H>=900)then dname,s2="T-Display P4 LCD",true
 elseif l>=700 or s>=460 then dname,s2="Large HD",true
-else dname,s2=(W>=440 and H<320)and"Wide Compact"or((port and W<=260)and"Compact Portrait"or"T-Deck"),false end
+else dname,s2=(W>=440 and H<320)and"Wide Compact"or"T-Deck",false end
 if s2 then f_xs,f_sm,f_md,f_lg,f_xl,f_rk=14,14,16,20,24,16 else f_xs,f_sm,f_md,f_lg,f_xl,f_rk=10,11,12,14,16,12 end
 lh_xs,lh_sm,lh_md,lh_lg,lh_xl=th(f_xs),th(f_sm),th(f_md),th(f_lg),th(f_xl)
 if s2 then top_h,bot_h,pad,gap=I(max(lh_md+16,40)),I(max(lh_md+26,54)),14,8
@@ -53,8 +53,6 @@ else top_h,bot_h,pad,gap=20,30,6,4 end
 tbl_h=max(80,H-top_h-bot_h)
 if s2 then
 cc_h=I(clp(tbl_h*0.3,88,120));cc_w=I(cc_h*0.74);cc_g,p_cw,p_ch,p_sm,p_lg=12,cc_w,cc_h,5,11
-elseif port then
-cc_g=4;cc_w=I(clp((W-16-cc_g*4)/5,34,40));cc_h=I(clp(cc_w*1.32,44,52));p_cw,p_ch,p_sm,p_lg=35,46,3,5
 else
 cc_h=clp(I(tbl_h*0.3),40,48);cc_w=clp(I(cc_h*0.77),32,37);cc_g,p_cw,p_ch,p_sm,p_lg=5,cc_w,cc_h,3,5
 end
@@ -313,7 +311,7 @@ local function cyc_bl()b_idx=(b_idx%#BLINDS)+1;local sb,bb=blinds();sys.toast(fm
 local function rst_tbl()for i=1,4 do seats[i].stack=S0 end;sys.toast("New $500 Table");sfx();start_hand()end
 rebuild_btns=function()
 btns={};local sb,bb=blinds();local cmp=(W<280)
-if port and s2 then btns={{label="ROTATE TO LANDSCAPE",w=W-32,enabled=false}};f_idx=1;return end
+if port then btns={{label="ROTATE TO LANDSCAPE",w=W-32,enabled=false}};f_idx=1;return end
 if state=="title"then
 btns={
 {label=fmt("BLINDS $%d/$%d",sb,bb),w=96,enabled=true,fn=cyc_bl},
@@ -460,7 +458,7 @@ local ms=(state=="title")and fmt("BLINDS $%d/$%d",sb,bb)or fmt("%s · $%d/$%d",S
 local mx=I((W-tw(ms,tf))/2);cv:text(mx,ty,ms,C.accent,tf)
 local ps=fmt("PEAK $%d%s",I(best_b),snd and""or" [M]")
 cv:text(max(mx+tw(ms,tf)+6,W-tw(ps,tf)-pad),ty,ps,C.sub,tf)
-if port and s2 then
+if port then
 local px,py=16,top_h+16;local bw,bh=W-px*2,tbl_h-py*2
 box(px,py,bw,bh,K_FDK,C.accent,12)
 local my=py+I(bh*0.28)
@@ -488,21 +486,6 @@ local p_y=max(t2y+lh_sm+8,I(by+(bh-ph)*0.54))
 box(cx-I(plw/2),p_y,plw,ph,K_BAC,C.accent,5);tcx(cx,p_y+I((ph-lh_md)/2),pl,C.text,f_md)
 local hy=by+bh-lh_sm-(s2 and 12 or 6)
 if hy>p_y+ph+4 then tcx(cx,hy,W>=300 and"Tap [DEAL HOLD'EM] or press [D] to play"or"Tap [DEAL] below to play",C.sub,f_sm)end
-elseif port then
-local py,pw=top_h+4,I((W-16)/3);for i=0,2 do ai_pod(i+2,4+i*(pw+4),py,pw,40)end
-local sy=py+43;local tc=I(max(0,c_bet-seats[1].sb))
-tcx(cx,sy,fmt("POT $%d   ·   %s",I(pot),tc>0 and fmt("CALL $%d",tc)or"CHECK OK"),K_GLD,f_sm)
-local ccy=sy+16;brow(I((W-(cc_w*5+cc_g*4))/2),ccy,3)
-local hy,p=ccy+cc_h+6,seats[1]
-if#p.cards==2 then cbox(6,hy,p_cw,p_ch,p.cards[1],false);cbox(34,hy,p_cw,p_ch,p.cards[2],false)end
-local ix,iw=74,W-78
-if state=="done"and b_tit~=""then
-box(ix,hy,iw,p_ch,0x0D131A,b_col,5);tcx(ix+I(iw/2),hy+6,b_tit,b_col,f_md);tcx(ix+I(iw/2),hy+24,b_sub,C.text,f_xs)
-else
-box(ix,hy,iw,p_ch,K_POD,state=="player"and C.accent or 0x22303C,5)
-local _,_,hn=eval_hand(p.cards,board)
-cv:text(ix+4,hy+4,p.fold and"FOLDED"or hn,K_GLD,f_xs);cv:text(ix+4,hy+18,fmt("BET $%d  R:$%d",I(p.sb),I(r_to)),C.accent,f_xs);cv:text(ix+4,hy+31,p.st~=""and p.st or"YOUR TURN",C.sub,f_xs)
-end
 else
 local vp,hp,pg=s2 and 12 or 4,s2 and 16 or 6,s2 and 12 or 4
 local py,ph=top_h+vp,s2 and I(tbl_h*0.27)or 40;local pw=I((W-hp*2-pg*2)/3)
@@ -582,7 +565,7 @@ local p=seats[trn_s]
 if p and not p.hum and not p.fold and not p.all then ai_go(trn_s)else adv_turn()end
 end
 function app.on_input(ev)
-if not ev or(port and s2)then return end
+if not ev or port then return end
 if ev.type=="down"then
 local ex,ey=tonumber(ev.x)or 0,tonumber(ev.y)or 0
 for i=1,#btns do

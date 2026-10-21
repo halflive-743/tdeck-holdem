@@ -294,7 +294,6 @@
 
 <div class="device-bar">
   <div class="dev-pill active" onclick="switchDevice('tdeck')">LilyGo T-Deck (320×208)</div>
-  <div class="dev-pill" onclick="switchDevice('heltec')">Heltec V4 (240×244)</div>
   <div class="dev-pill" onclick="switchDevice('pager')">T-LoRa Pager (480×178)</div>
   <div class="dev-pill" onclick="switchDevice('p4_land')">T-Display P4 LCD (1168×474)</div>
   <div class="dev-pill" onclick="switchDevice('p4_amoled_land')">T-Display P4 AMOLED (1232×502)</div>
@@ -367,7 +366,6 @@ const toastEl = document.getElementById('toast');
 
 const DEVICES = {
   tdeck:          { name: "LilyGo T-Deck",              spec: "320×208 · MESHCORE",     w: 320,  h: 208,  shellW: 368,  hasKbd: true  },
-  heltec:         { name: "Heltec V4",                 spec: "240×244 · TFT PORTRAIT", w: 240,  h: 244,  shellW: 288,  hasKbd: false },
   pager:          { name: "LilyGo T-LoRa Pager",        spec: "480×178 · KEYPAD WIDE",   w: 480,  h: 178,  shellW: 528,  hasKbd: true  },
   p4_land:        { name: "T-Display P4 LCD",           spec: "1168×474 · HORIZONTAL / LANDSCAPE", w: 1168, h: 474, shellW: 1210, hasKbd: false },
   p4_amoled_land: { name: "T-Display P4 AMOLED",        spec: "1232×502 · HORIZONTAL / LANDSCAPE", w: 1232, h: 502, shellW: 1274, hasKbd: false }
@@ -968,6 +966,11 @@ function on_tick() {
 function rebuild_buttons() {
   const { sb, bb } = get_blinds();
   const cmp = (W < 280);
+  if (port) {
+    active_btns = [{ label: "ROTATE TO LANDSCAPE", weight: W - 32, enabled: false }];
+    focus_idx = 1;
+    return;
+  }
   if (state === "title") {
     active_btns = [
       { label: `BLINDS $${sb}/$${bb}`, weight: 96, enabled: true, fn: cycle_blinds },
@@ -1186,7 +1189,7 @@ function compute_layout() {
   } else if (l >= 700 || s >= 460) {
     dname = "Large HD"; s2 = true;
   } else {
-    dname = (W >= 440 && H < 320) ? "Wide Compact" : ((port && W <= 260) ? "Compact Portrait" : "T-Deck");
+    dname = (W >= 440 && H < 320) ? "Wide Compact" : "T-Deck";
     s2 = false;
   }
 
@@ -1199,7 +1202,7 @@ function compute_layout() {
 
   if (s2) {
     top_h = Math.max(lh_md + 16, 40);
-    bot_h = port ? Math.max(lh_md + 42, 72) : Math.max(lh_md + 26, 54);
+    bot_h = Math.max(lh_md + 26, 54);
     pad = 14; gap = 8;
   } else {
     top_h = 20; bot_h = 30; pad = 6; gap = 4;
@@ -1211,11 +1214,6 @@ function compute_layout() {
     cc_w = Math.floor(cc_h * 0.74);
     cc_g = 12; p_cw = cc_w; p_ch = cc_h;
     p_sm = 5; p_lg = 11;
-  } else if (port) {
-    cc_g = 4;
-    cc_w = clamp(Math.floor((W - 16 - cc_g * 4) / 5), 34, 40);
-    cc_h = clamp(Math.floor(cc_w * 1.32), 44, 52);
-    p_cw = 35; p_ch = 46; p_sm = 3; p_lg = 5;
   } else {
     cc_h = clamp(Math.floor(tbl_h * 0.3), 40, 48);
     cc_w = clamp(Math.floor(cc_h * 0.77), 32, 37);
@@ -1243,7 +1241,7 @@ function draw_screen() {
   const ps = `PEAK $${I(best_bank)}${sound_on ? "" : " [M]"}`;
   cv.text(Math.max(mx + text_w(ms, tf) + 6, W - text_w(ps, tf) - pad), ty, ps, C.sub, tf);
 
-  if (port && s2) {
+  if (port) {
     const px = 16, py = top_h + 16, bw = W - px * 2, bh = tbl_h - py * 2;
     cv.rect(px, py, bw, bh, COL_FELT_DARK, true, 12);
     cv.rect(px, py, bw, bh, C.accent, false, 12);
@@ -1286,40 +1284,6 @@ function draw_screen() {
     if (hy > p_y + ph + 4) {
       const hint = W >= 300 ? "Tap [DEAL HOLD'EM] or press [D] to play" : "Tap [DEAL] below to play";
       cv.text(I(cx - text_w(hint, f_sm) / 2), hy, hint, C.sub, f_sm);
-    }
-  } else if (port) {
-    // Compact Portrait Mode (Heltec V4)
-    const py = top_h + 4, pw = I((W - 16) / 3);
-    for (let i = 0; i < 3; i++) draw_ai_pod(i + 2, 4 + i * (pw + 4), py, pw, 40);
-
-    const sy = py + 43;
-    const to_call = I(Math.max(0, cur_bet - seats[0].street_bet));
-    const tc_str = to_call > 0 ? `CALL $${to_call}` : "CHECK OK";
-    const pstr = `POT $${I(pot)}   ·   ${tc_str}`;
-    cv.text(I(cx - text_w(pstr, f_sm) / 2), sy, pstr, COL_GOLD, f_sm);
-
-    const ccy = sy + 16;
-    draw_board_row(I((W - (cc_w * 5 + cc_g * 4)) / 2), ccy, 3);
-
-    const hy = ccy + cc_h + 6, p = seats[0];
-    if (p.cards.length === 2) {
-      draw_card_box(6, hy, p_cw, p_ch, p.cards[0], false);
-      draw_card_box(34, hy, p_cw, p_ch, p.cards[1], false);
-    }
-
-    const ix = 74, iw = W - 78;
-    if (state === "done" && banner_title) {
-      cv.rect(ix, hy, iw, p_ch, 0x0D131A, true, 5);
-      cv.rect(ix, hy, iw, p_ch, banner_col, false, 5);
-      cv.text(I(ix + iw / 2 - text_w(banner_title, f_md) / 2), hy + 6, banner_title, banner_col, f_md);
-      cv.text(I(ix + iw / 2 - text_w(banner_sub, f_xs) / 2), hy + 24, banner_sub, C.text, f_xs);
-    } else {
-      cv.rect(ix, hy, iw, p_ch, COL_POD_BG, true, 5);
-      cv.rect(ix, hy, iw, p_ch, state === "player" ? C.accent : 0x22303C, false, 5);
-      const [, , hn] = eval_best_hand(p.cards, board);
-      cv.text(ix + 4, hy + 4, p.folded ? "FOLDED" : hn, COL_GOLD, f_xs);
-      cv.text(ix + 4, hy + 18, `BET $${I(p.street_bet)}  R:$${I(raise_to)}`, C.accent, f_xs);
-      cv.text(ix + 4, hy + 31, p.status ? p.status : "YOUR TURN", C.sub, f_xs);
     }
   } else {
     // Landscape Mode (T-Deck, Pager, T-Display P4 Landscape)

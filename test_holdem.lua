@@ -124,7 +124,6 @@ end
 
 local devices = {
   { name = "LilyGo T-Deck",                     w = 320,  h = 208  },
-  { name = "Heltec V4 Portrait",                w = 240,  h = 244  },
   { name = "LilyGo T-LoRa Pager",               w = 480,  h = 178  },
   { name = "LilyGo T-Display P4 LCD (Land)",    w = 1168, h = 474  },
   { name = "LilyGo T-Display P4 AMOLED (Land)", w = 1232, h = 502  },
