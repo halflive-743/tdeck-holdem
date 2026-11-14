@@ -45,7 +45,7 @@ local s,l=min(W,H),max(W,H);port=(H>W)
 if l>=1185 or(W==568 and H>=900)or(W>=1185 and H>=460)then dname,s2="T-Display P4 AMOLED",true
 elseif(l>=1050 and l<1185)or(W==540 and H>=900)or(W>=500 and W<560 and H>=900)then dname,s2="T-Display P4 LCD",true
 elseif l>=700 or s>=460 then dname,s2="Large HD",true
-else dname,s2=(W>=440 and H<320)and"Wide Compact"or"T-Deck",false end
+else dname,s2="T-Deck",false end
 if s2 then f_xs,f_sm,f_md,f_lg,f_xl,f_rk=14,14,16,20,24,16 else f_xs,f_sm,f_md,f_lg,f_xl,f_rk=10,11,12,14,16,12 end
 lh_xs,lh_sm,lh_md,lh_lg,lh_xl=th(f_xs),th(f_sm),th(f_md),th(f_lg),th(f_xl)
 if s2 then top_h,bot_h,pad,gap=I(max(lh_md+16,40)),I(max(lh_md+26,54)),14,8

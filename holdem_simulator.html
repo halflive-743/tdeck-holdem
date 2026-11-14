@@ -294,7 +294,6 @@
 
 <div class="device-bar">
   <div class="dev-pill active" onclick="switchDevice('tdeck')">LilyGo T-Deck (320×208)</div>
-  <div class="dev-pill" onclick="switchDevice('pager')">T-LoRa Pager (480×178)</div>
   <div class="dev-pill" onclick="switchDevice('p4_land')">T-Display P4 LCD (1168×474)</div>
   <div class="dev-pill" onclick="switchDevice('p4_amoled_land')">T-Display P4 AMOLED (1232×502)</div>
 </div>
@@ -366,7 +365,6 @@ const toastEl = document.getElementById('toast');
 
 const DEVICES = {
   tdeck:          { name: "LilyGo T-Deck",              spec: "320×208 · MESHCORE",     w: 320,  h: 208,  shellW: 368,  hasKbd: true  },
-  pager:          { name: "LilyGo T-LoRa Pager",        spec: "480×178 · KEYPAD WIDE",   w: 480,  h: 178,  shellW: 528,  hasKbd: true  },
   p4_land:        { name: "T-Display P4 LCD",           spec: "1168×474 · HORIZONTAL / LANDSCAPE", w: 1168, h: 474, shellW: 1210, hasKbd: false },
   p4_amoled_land: { name: "T-Display P4 AMOLED",        spec: "1232×502 · HORIZONTAL / LANDSCAPE", w: 1232, h: 502, shellW: 1274, hasKbd: false }
 };
@@ -1189,7 +1187,7 @@ function compute_layout() {
   } else if (l >= 700 || s >= 460) {
     dname = "Large HD"; s2 = true;
   } else {
-    dname = (W >= 440 && H < 320) ? "Wide Compact" : "T-Deck";
+    dname = "T-Deck";
     s2 = false;
   }
 
@@ -1286,7 +1284,7 @@ function draw_screen() {
       cv.text(I(cx - text_w(hint, f_sm) / 2), hy, hint, C.sub, f_sm);
     }
   } else {
-    // Landscape Mode (T-Deck, Pager, T-Display P4 Landscape)
+    // Landscape Mode (T-Deck, T-Display P4 Landscape)
     const vp = s2 ? 12 : 4, hp = s2 ? 16 : 6, pg = s2 ? 12 : 4;
     const py = top_h + vp, ph = s2 ? I(tbl_h * 0.27) : 40;
     const pw = I((W - hp * 2 - pg * 2) / 3);
